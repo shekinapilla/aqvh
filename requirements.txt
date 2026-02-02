@@ -1,23 +1,23 @@
-
 ########## CORE APP REQUIREMENTS ##########
-
-streamlit
-numpy
-matplotlib
-psutil
-pylatexenc
-Pillow
-pandas
-sympy
-scipy
-jinja2
-python-dotenv
+python
+streamlit==1.32.2
+numpy==1.24.4
+matplotlib==3.7.3
+psutil==5.9.5
+pylatexenc==2.10
+Pillow==10.2.0
+pandas==2.0.3
+sympy==1.12
+scipy==1.10.1
+jinja2==3.1.3
+python-dotenv==1.0.1
 
 ########## QISKIT SUITE ##########
 
 qiskit==0.45.3
 qiskit-terra==0.45.3
 qiskit-aer==0.12.0
+
 ###########################################
 google-auth
 google-auth-oauthlib
