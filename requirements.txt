@@ -1,3 +1,5 @@
+setuptools>=68.0.0
+wheel
 ########## CORE APP REQUIREMENTS ##########
 
 streamlit==1.32.2
