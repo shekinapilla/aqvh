@@ -11,6 +11,7 @@ import psutil
 import gc
 import warnings
 from google_auth import login_button, handle_callback
+from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 
 
@@ -30,7 +31,6 @@ st.set_page_config(
 HISTORY_FILE = "history.pkl"
 
 def save_history_to_disk():
-    """Saves the circuit history and saved circuits to a pickle file."""
     try:
         with open(HISTORY_FILE, "wb") as f:
             pickle.dump(
@@ -40,6 +40,11 @@ def save_history_to_disk():
                 },
                 f
             )
+
+        # 🔥 Step 3 trigger: upload per user
+        if st.session_state.get("google_logged_in"):
+            upload_history_to_drive(HISTORY_FILE)
+
     except Exception as e:
         st.sidebar.error(f"Failed saving history to disk: {e}")
 
