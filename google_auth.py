@@ -3,15 +3,15 @@ import os
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 SCOPES = [
     "openid",
-    "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
-    "openid https://www.googleapis.com/auth/userinfo.profile ...",
-    
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/drive.file",
 ]
-
 def login_button():
     flow = Flow.from_client_config(
         {
@@ -73,11 +73,7 @@ def handle_callback():
     st.session_state["google_logged_in"] = True
 
     st.query_params.clear()
-    # Fetch user info (email)
-    userinfo_service = build("oauth2", "v2", credentials=creds)
-    user_info = userinfo_service.userinfo().get().execute()
     
-    st.session_state["user_email"] = user_info["email"]
 def get_drive_service():
     creds = st.session_state["google_creds"]
     return build("drive", "v3", credentials=creds)
