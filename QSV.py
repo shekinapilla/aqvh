@@ -45,90 +45,93 @@ if "code" in st.query_params:
     if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
         st.query_params.clear()
+        st.rerun()
 
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
 
     st.markdown("""
     <style>
-    /* Page background */
     .stApp {
         background: radial-gradient(circle at top, #0f2027, #000);
     }
-    
-    /* Login card */
     .login-card {
-        max-width: 420px;
-        margin: 120px auto;
-        padding: 32px;
+        max-width: 460px;
+        margin: 110px auto;
+        padding: 30px;
         border-radius: 18px;
         background: linear-gradient(145deg, #16222a, #3a6073);
-        box-shadow: 0 15px 40px rgba(0,0,0,0.6);
-        text-align: center;
+        box-shadow: 0 18px 45px rgba(0,0,0,0.6);
     }
-    
-    /* Title */
-    .login-card h2 {
-        color: #00f7ff;
-        margin-bottom: 10px;
+    .login-title {
+        text-align:center;
+        color:#00f7ff;
+        margin-bottom:8px;
     }
-    
-    /* Subtitle */
-    .login-card p {
-        color: #d0d0d0;
-        font-size: 14px;
-        margin-bottom: 22px;
-    }
-    
-    /* Google button */
-    .google-btn {
-        display: block;
-        width: 100%;
-        padding: 14px;
-        margin: 14px 0;
-        border-radius: 10px;
-        background: white;
-        color: #444;
-        font-weight: 600;
-        text-decoration: none;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    
-    .google-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.35);
-    }
-    
-    /* OR divider */
-    .divider {
-        color: #aaa;
-        margin: 16px 0;
-        font-size: 13px;
-    }
-    
-    /* Guest button */
-    .guest-btn button {
-        width: 100%;
-        padding: 12px;
-        border-radius: 10px;
-        background: linear-gradient(135deg,#00f7ff,#0077ff);
-        color: black;
-        font-weight: bold;
+    .login-sub {
+        text-align:center;
+        color:#cfcfcf;
+        font-size:14px;
+        margin-bottom:20px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Google login
-    login_button()
+    st.markdown("""
+    <div class="login-card">
+        <h2 class="login-title">🔐 Quantum Visualizer</h2>
+        <p class="login-sub">Choose how you want to continue</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("### OR")
+    # Tabs for login options
+    tab_email, tab_google, tab_guest = st.tabs(
+        ["✉️ Email Login", "🔑 Google", "👤 Guest"]
+    )
 
-    # Guest mode button
-    if st.button("👤 Continue as Guest"):
-        st.session_state.auth_mode = "guest"
-        st.rerun()
+    # -------------------------
+    # ✉️ EMAIL + PASSWORD LOGIN
+    # -------------------------
+    with tab_email:
+        st.markdown("### Sign in with Email")
+        email = st.text_input("Email", placeholder="user@example.com")
+        password = st.text_input("Password", type="password")
 
-    st.stop()   # ⛔ VERY IMPORTANT: stop app here
+        if st.button("🔓 Login", use_container_width=True):
+            if email and password:
+                # ✅ Demo / local auth (NO real verification)
+                st.session_state.auth_mode = "local"
+                st.session_state.local_email = email
+                st.success("✅ Logged in successfully")
+                st.rerun()
+            else:
+                st.error("❌ Please enter email and password")
+
+        st.caption("ℹ️ Email login is local-only (no cloud sync).")
+
+    # -------------------------
+    # 🔑 GOOGLE LOGIN
+    # -------------------------
+    with tab_google:
+        st.markdown("### Continue with Google")
+        st.markdown(
+            "Your circuits will be saved securely to **your Google Drive**."
+        )
+        login_button()  # existing OAuth flow
+
+    # -------------------------
+    # 👤 GUEST LOGIN
+    # -------------------------
+    with tab_guest:
+        st.markdown("### Continue as Guest")
+        st.markdown(
+            "Guest mode does not save data to the cloud."
+        )
+        if st.button("👤 Enter as Guest", use_container_width=True):
+            st.session_state.auth_mode = "guest"
+            st.rerun()
+
+    st.stop()  # ⛔ stop app until logged in
 
 # -------------------------
 # History Storage (Per Mode)
