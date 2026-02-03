@@ -423,29 +423,30 @@ if st.session_state.history:
         if st.sidebar.button(f"🔹 {desc}", key=f"history_{idx}"):
             try:
                 stored = st.session_state.saved_circuits[idx]
-                loaded_qc = stored["circuit"]
                 loaded_ops = stored.get("ops", [])
-                
-                # Update all relevant session state variables to match the loaded circuit
-                st.session_state.manual_qc = loaded_qc
+                loaded_qc = stored["circuit"]
+        
+                # Restore base state
                 st.session_state.manual_ops = loaded_ops
                 st.session_state.n_qubits = loaded_qc.num_qubits
+        
+                # 🔥 Force rebuild
+                rebuild_manual_qc()
+        
+                # Reset modes
                 st.session_state.mode = "manual"
                 st.session_state.uploaded_qc = None
                 st.session_state.uploaded_file_name = None
-                
-                # Explicitly set the history and pointer for the manual builder to the loaded state
-                st.session_state.manual_ops_history = [loaded_ops]
-                st.session_state.manual_ops_pointer = 0
-                
-                # Explicitly update the QASM text area content to reflect the loaded circuit
-                new_qasm = safe_get_qasm(loaded_qc)
+        
+                # Reset QASM editor
+                new_qasm = safe_get_qasm(st.session_state.manual_qc)
                 st.session_state.editable_qasm = new_qasm
                 st.session_state.qasm_history = [new_qasm]
                 st.session_state.qasm_redo = []
-                
+        
                 st.success(f"✅ Loaded: {desc}")
-                
+                st.rerun()   # 🔥 THIS IS CRITICAL
+        
             except Exception as e:
                 st.sidebar.error(f"❌ Failed to load circuit: {e}")
 
