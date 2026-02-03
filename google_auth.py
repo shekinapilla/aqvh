@@ -73,7 +73,11 @@ def handle_callback():
     st.session_state["google_logged_in"] = True
 
     st.query_params.clear()
-
+    # Fetch user info (email)
+    userinfo_service = build("oauth2", "v2", credentials=creds)
+    user_info = userinfo_service.userinfo().get().execute()
+    
+    st.session_state["user_email"] = user_info["email"]
 def get_drive_service():
     creds = st.session_state["google_creds"]
     return build("drive", "v3", credentials=creds)
@@ -99,3 +103,49 @@ def get_or_create_folder(service, name, parent_id=None):
 
     folder = service.files().create(body=metadata, fields="id").execute()
     return folder["id"]
+def upload_history_to_drive(local_file="history.pkl"):
+    """
+    Upload history.pkl to Google Drive under a folder named by user email
+    """
+    if "google_creds" not in st.session_state:
+        return
+
+    if "user_email" not in st.session_state:
+        return
+
+    creds = st.session_state["google_creds"]
+    email = st.session_state["user_email"]
+
+    drive = build("drive", "v3", credentials=creds)
+
+    # 1️⃣ Check if folder already exists
+    query = f"name='{email}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    results = drive.files().list(q=query, fields="files(id)").execute()
+    files = results.get("files", [])
+
+    if files:
+        folder_id = files[0]["id"]
+    else:
+        # 2️⃣ Create folder
+        folder_metadata = {
+            "name": email,
+            "mimeType": "application/vnd.google-apps.folder",
+        }
+        folder = drive.files().create(body=folder_metadata, fields="id").execute()
+        folder_id = folder["id"]
+
+    # 3️⃣ Upload / overwrite history.pkl
+    from googleapiclient.http import MediaFileUpload
+
+    file_metadata = {
+        "name": "history.pkl",
+        "parents": [folder_id],
+    }
+
+    media = MediaFileUpload(local_file, resumable=True)
+
+    drive.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id",
+    ).execute()
