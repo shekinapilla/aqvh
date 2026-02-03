@@ -39,99 +39,101 @@ st.set_page_config(
 # LOGIN PAGE (ENTRY GATE)
 # -------------------------
 
-# Handle Google callback ONLY if redirected
-if "code" in st.query_params:
-    handle_callback()
-    if st.session_state.get("google_logged_in"):
-        st.session_state.auth_mode = "google"
-        st.query_params.clear()
-        st.rerun()
+# -------------------------
+# GOOGLE-LIKE LOGIN PAGE
+# -------------------------
 
-# If user not authenticated yet → show login page
-if st.session_state.auth_mode is None:
+st.markdown("""
+<style>
+body {
+    background-color: #f5f6fa;
+}
+.login-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 90px;
+}
+.login-card {
+    width: 420px;
+    padding: 32px;
+    border-radius: 14px;
+    background: white;
+    box-shadow: 0px 10px 30px rgba(0,0,0,0.15);
+}
+.login-title {
+    font-size: 26px;
+    font-weight: 600;
+    text-align: center;
+}
+.login-sub {
+    text-align: center;
+    color: #777;
+    margin-bottom: 24px;
+}
+.divider {
+    text-align: center;
+    margin: 20px 0;
+    color: #999;
+}
+.google-btn {
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+}
+.footer-text {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 14px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    st.markdown("""
-    <style>
-    .stApp {
-        background: radial-gradient(circle at top, #0f2027, #000);
-    }
-    .login-card {
-        max-width: 460px;
-        margin: 110px auto;
-        padding: 30px;
-        border-radius: 18px;
-        background: linear-gradient(145deg, #16222a, #3a6073);
-        box-shadow: 0 18px 45px rgba(0,0,0,0.6);
-    }
-    .login-title {
-        text-align:center;
-        color:#00f7ff;
-        margin-bottom:8px;
-    }
-    .login-sub {
-        text-align:center;
-        color:#cfcfcf;
-        font-size:14px;
-        margin-bottom:20px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
+st.markdown("""
+<div class="login-wrapper">
     <div class="login-card">
-        <h2 class="login-title">🔐 Quantum Visualizer</h2>
-        <p class="login-sub">Choose how you want to continue</p>
+        <div class="login-title">Welcome</div>
+        <div class="login-sub">We are happy to have you back!</div>
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-    # Tabs for login options
-    tab_email, tab_google, tab_guest = st.tabs(
-        ["✉️ Email Login", "🔑 Google", "👤 Guest"]
-    )
+# --- Inputs ---
+email = st.text_input("Email or phone")
+password = st.text_input("Password", type="password")
 
-    # -------------------------
-    # ✉️ EMAIL + PASSWORD LOGIN
-    # -------------------------
-    with tab_email:
-        st.markdown("### Sign in with Email")
-        email = st.text_input("Email", placeholder="user@example.com")
-        password = st.text_input("Password", type="password")
+col1, col2 = st.columns([1,1])
+with col1:
+    remember = st.checkbox("Remember me")
+with col2:
+    st.markdown("<div style='text-align:right; margin-top:30px;'>Forgot password?</div>",
+                unsafe_allow_html=True)
 
-        if st.button("🔓 Login", use_container_width=True):
-            if email and password:
-                # ✅ Demo / local auth (NO real verification)
-                st.session_state.auth_mode = "local"
-                st.session_state.local_email = email
-                st.success("✅ Logged in successfully")
-                st.rerun()
-            else:
-                st.error("❌ Please enter email and password")
+# --- Sign in button ---
+if st.button("Sign In", use_container_width=True):
+    if email and password:
+        st.session_state.auth_mode = "local"
+        st.session_state.local_email = email
+        st.success("✅ Logged in")
+        st.rerun()
+    else:
+        st.error("❌ Please enter email and password")
 
-        st.caption("ℹ️ Email login is local-only (no cloud sync).")
+# --- Divider ---
+st.markdown("<div class='divider'>— Or —</div>", unsafe_allow_html=True)
 
-    # -------------------------
-    # 🔑 GOOGLE LOGIN
-    # -------------------------
-    with tab_google:
-        st.markdown("### Continue with Google")
-        st.markdown(
-            "Your circuits will be saved securely to **your Google Drive**."
-        )
-        login_button()  # existing OAuth flow
+# --- Google Sign-in ---
+login_button()   # ← your existing Google OAuth button
 
-    # -------------------------
-    # 👤 GUEST LOGIN
-    # -------------------------
-    with tab_guest:
-        st.markdown("### Continue as Guest")
-        st.markdown(
-            "Guest mode does not save data to the cloud."
-        )
-        if st.button("👤 Enter as Guest", use_container_width=True):
-            st.session_state.auth_mode = "guest"
-            st.rerun()
+# --- Footer ---
+st.markdown("""
+<div class="footer-text">
+    Don’t have an account? <b>Sign up</b>
+</div>
+""", unsafe_allow_html=True)
 
-    st.stop()  # ⛔ stop app until logged in
+st.stop()
 
 # -------------------------
 # History Storage (Per Mode)
