@@ -44,6 +44,7 @@ if "code" in st.query_params:
     handle_callback()
     if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
+        st.query_params.clear()
 
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
@@ -152,7 +153,11 @@ def save_history_to_disk():
             )
 
         # 🔥 Step 3 trigger: upload per user
-        if st.session_state.auth_mode == "google":
+        if (
+            st.session_state.auth_mode == "google"
+            and st.session_state.get("google_logged_in")
+            and st.session_state.get("google_creds")
+        ):
             upload_history_to_drive(HISTORY_FILE)
 
     except Exception as e:
@@ -384,8 +389,12 @@ elif st.session_state.auth_mode == "guest":
 
 
 if st.sidebar.button("🚪 Logout"):
-    for k in ["auth_mode", "google_logged_in", "google_email", "google_creds"]:
+    for k in [
+        "auth_mode", "google_logged_in", "google_email", "google_creds",
+        "initialized", "history", "saved_circuits"
+    ]:
         st.session_state.pop(k, None)
+    
     st.rerun()
 
 def reset_app():
