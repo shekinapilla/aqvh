@@ -38,147 +38,165 @@ st.set_page_config(
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
 
-    # Display main title at top
-    st.markdown(
-        """
-        <div style="
-            text-align: center;
-            margin-bottom: 30px;
-            padding-top: 40px;
-        ">
-            <h1 style="
-                color: #00f7ff;
-                font-family: Segoe UI, sans-serif;
-                letter-spacing: 1px;
-                text-shadow: 0 2px 10px rgba(0,247,255,0.3);
-                margin-bottom: 10px;
-            ">
-                Quantum State Visualizer
-            </h1>
-            <p style="
-                color: #aaa;
-                font-size: 16px;
-                margin-top: 0;
-            ">
-                Visualize quantum states on the Bloch sphere
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Title above login card
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        padding: 20px;
+        border-radius: 14px;
+        text-align: center;
+        margin-bottom: 40px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    ">
+        <h1 style="color:#00f7ff; margin:0; font-family:Segoe UI, sans-serif; letter-spacing:1px;">
+            Quantum State Visualizer
+        </h1>
+        <p style="color:#d0d0d0; margin-top:10px;">
+            Visualize quantum states on the Bloch sphere
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Login card styling
+    # Centered login card container
     st.markdown(
         """
         <style>
         /* Page background */
         .stApp {
             background: radial-gradient(circle at top, #0f2027, #000);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
         }
         
-        /* Center the main container */
-        .main .block-container {
-            max-width: 500px !important;
-            padding-top: 40px !important;
+        /* Centered container for login */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 60vh;
+            padding: 20px;
         }
-
+        
         /* Login card */
         .login-card {
-            max-width: 420px;
-            margin: 0 auto;
-            padding: 40px 32px;
+            max-width: 400px;
+            width: 100%;
+            padding: 32px;
             border-radius: 18px;
             background: linear-gradient(145deg, #16222a, #3a6073);
             box-shadow: 0 15px 40px rgba(0,0,0,0.6);
             text-align: center;
-            border: 1px solid rgba(0, 247, 255, 0.1);
         }
 
-        /* Card title */
+        /* Title inside card */
         .login-card h2 {
             color: #00f7ff;
             margin-bottom: 10px;
             font-size: 24px;
         }
 
-        /* Card subtitle */
+        /* Subtitle */
         .login-card p {
             color: #d0d0d0;
             font-size: 14px;
-            margin-bottom: 30px;
-            line-height: 1.4;
+            margin-bottom: 25px;
         }
 
-        /* Google button styling */
-        .stButton > button {
+        /* Google button */
+        .google-btn {
+            display: block;
             width: 100%;
             padding: 14px;
-            margin: 5px 0;
+            margin: 14px 0;
             border-radius: 10px;
+            background: white;
+            color: #444;
             font-weight: 600;
-            transition: all 0.2s ease;
+            text-decoration: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
         }
 
         /* OR divider */
         .divider {
             display: flex;
             align-items: center;
-            text-align: center;
-            margin: 25px 0;
+            margin: 20px 0;
             color: #aaa;
-            font-size: 13px;
-            font-weight: 500;
         }
         
         .divider::before,
         .divider::after {
-            content: '';
+            content: "";
             flex: 1;
-            border-bottom: 1px solid #444;
-            margin: 0 15px;
-        }
-
-        /* Guest button specific */
-        .guest-btn-container {
-            margin-top: 10px;
+            border-bottom: 1px solid #555;
         }
         
-        /* Button hover effects */
-        div.stButton > button:hover {
+        .divider span {
+            padding: 0 15px;
+            font-size: 14px;
+        }
+
+        /* Guest button */
+        .guest-btn button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#00f7ff,#0077ff);
+            color: black;
+            font-weight: bold;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        
+        .guest-btn button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-
-    # Create login card
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
     
-    st.markdown('<h2>Welcome to Quantum Visualizer</h2>', unsafe_allow_html=True)
-    st.markdown('<p>Sign in to save your circuits and access them from anywhere</p>', unsafe_allow_html=True)
-
-    # Google login button
-    login_button()
-
-    # OR divider
-    st.markdown('<div class="divider">OR</div>', unsafe_allow_html=True)
-
-    # Guest mode button - centered
-    if st.button("👤 Continue as Guest", key="guest_login", use_container_width=True):
-        st.session_state.auth_mode = "guest"
-        st.rerun()
+    # Centered login card using columns
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        
+        st.markdown('<h2>🔐 Login</h2>', unsafe_allow_html=True)
+        st.markdown('<p>Choose your authentication method</p>', unsafe_allow_html=True)
+        
+        # Google login button
+        login_button()
+        
+        st.markdown('<div class="divider"><span>OR</span></div>', unsafe_allow_html=True)
+        
+        # Guest mode button
+        st.markdown('<div class="guest-btn">', unsafe_allow_html=True)
+        if st.button("👤 Continue as Guest", use_container_width=True):
+            st.session_state.auth_mode = "guest"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Additional info
+        st.markdown("""
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #444; color: #aaa; font-size: 12px;">
+        <p>• <strong>Google Login:</strong> Save & sync to Google Drive</p>
+        <p>• <strong>Guest Mode:</strong> Local storage only</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ⛔ VERY IMPORTANT: Stop app execution here
     st.stop()
-
 # -------------------------
 # History Storage (Per Mode)
 # -------------------------
