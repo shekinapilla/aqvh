@@ -14,7 +14,17 @@ from google_auth import login_button, handle_callback
 from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 
+# -------------------------
+# Global Auth State
+# -------------------------
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = None   # None | "google" | "guest"
 
+if "google_logged_in" not in st.session_state:
+    st.session_state.google_logged_in = False
+
+if "google_email" not in st.session_state:
+    st.session_state.google_email = None
 
 # -------------------------
 # Streamlit page config
@@ -24,12 +34,65 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+# -------------------------
+# LOGIN PAGE (ENTRY GATE)
+# -------------------------
 
+# Handle Google callback ONLY if redirected
+if "code" in st.query_params:
+    handle_callback()
+    if st.session_state.get("google_logged_in"):
+        st.session_state.auth_mode = "google"
+
+# If user not authenticated yet → show login page
+if st.session_state.auth_mode is None:
+
+    st.markdown(
+        """
+        <div style="
+            max-width:420px;
+            margin:120px auto;
+            padding:30px;
+            border-radius:14px;
+            background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+            text-align:center;
+            box-shadow:0 6px 20px rgba(0,0,0,0.4);
+        ">
+            <h2 style="color:#00f7ff;">🔐 Welcome</h2>
+            <p style="color:#ddd;">
+                Login to save your circuits, or continue as a guest.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Google login
+    login_button()
+
+    st.markdown("### OR")
+
+    # Guest mode button
+    if st.button("👤 Continue as Guest"):
+        st.session_state.auth_mode = "guest"
+        st.rerun()
+
+    st.stop()   # ⛔ VERY IMPORTANT: stop app here
 # -------------------------
 # Persistent History Storage
 # -------------------------
-HISTORY_FILE = "history.pkl"
+HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
+# -------------------------
+# History Storage (Per Mode)
+# -------------------------
+if st.session_state.auth_mode == "google":
+    safe_email = st.session_state.google_email.replace("@", "_").replace(".", "_")
+    USER_DIR = os.path.join("user_data", safe_email)
+else:
+    USER_DIR = os.path.join("user_data", "guest")
 
+os.makedirs(USER_DIR, exist_ok=True)
+HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
 def save_history_to_disk():
     try:
         with open(HISTORY_FILE, "wb") as f:
@@ -42,7 +105,7 @@ def save_history_to_disk():
             )
 
         # 🔥 Step 3 trigger: upload per user
-        if st.session_state.get("google_logged_in"):
+        if st.session_state.auth_mode == "google":
             upload_history_to_drive(HISTORY_FILE)
 
     except Exception as e:
@@ -266,13 +329,17 @@ st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
 st.sidebar.markdown("## Account")
 
-if "google_logged_in" not in st.session_state:
-    login_button()
-    handle_callback()
-else:
-    st.sidebar.success("Logged in with Google")
+if st.session_state.auth_mode == "google":
+    st.sidebar.success(f"✅ Google: {st.session_state.google_email}")
+
+elif st.session_state.auth_mode == "guest":
+    st.sidebar.info("👤 Guest mode (local only)")
 
 
+if st.sidebar.button("🚪 Logout"):
+    for k in ["auth_mode", "google_logged_in", "google_email", "google_creds"]:
+        st.session_state.pop(k, None)
+    st.rerun()
 
 def reset_app():
     st.session_state.n_qubits = 1
