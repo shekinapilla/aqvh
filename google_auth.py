@@ -5,10 +5,11 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = [
+    "openid",
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/drive.file",
-    "openid",
+    "openid https://www.googleapis.com/auth/userinfo.profile ...",
+    
 ]
 
 def login_button():
@@ -35,12 +36,10 @@ def login_button():
     st.markdown(f"### 🔐 [Login with Google]({auth_url})")
 
 def handle_callback():
-    # Prevent re-running OAuth multiple times
     if st.session_state.get("google_logged_in"):
         return
 
     query_params = st.query_params
-
     if "code" not in query_params:
         return
 
@@ -58,13 +57,19 @@ def handle_callback():
     )
 
     flow.redirect_uri = os.environ["REDIRECT_URI"]
-
-    # Exchange code ONLY ONCE
     flow.fetch_token(code=query_params["code"])
 
     creds = flow.credentials
+
+    # ✅ Decode ID token to get email
+    idinfo = id_token.verify_oauth2_token(
+        creds.id_token,
+        requests.Request(),
+        os.environ["GOOGLE_CLIENT_ID"],
+    )
+
+    st.session_state["google_email"] = idinfo["email"]
     st.session_state["google_creds"] = creds
     st.session_state["google_logged_in"] = True
 
-    # Clear URL immediately to avoid reuse
     st.query_params.clear()
