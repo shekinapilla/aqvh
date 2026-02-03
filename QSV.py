@@ -24,6 +24,15 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+def require_login():
+    if not st.session_state.get("google_logged_in", False):
+        st.title("🔐 Login Required")
+        st.markdown("Please login with Google to continue.")
+
+        login_button()
+        handle_callback()
+
+        st.stop()   # 🚨 This prevents the app from loading
 
 # -------------------------
 # Persistent History Storage
@@ -80,6 +89,7 @@ if "initialized" not in st.session_state:
 
     load_history_from_disk()
     st.session_state.initialized = True
+require_login()
 
 # -------------------------
 # Helper functions
