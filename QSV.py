@@ -78,10 +78,7 @@ if st.session_state.auth_mode is None:
         st.rerun()
 
     st.stop()   # ⛔ VERY IMPORTANT: stop app here
-# -------------------------
-# Persistent History Storage
-# -------------------------
-HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
+
 # -------------------------
 # History Storage (Per Mode)
 # -------------------------
