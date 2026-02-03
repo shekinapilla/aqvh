@@ -15,17 +15,7 @@ from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 
 
-# -------------------------
-# Initialize Auth Session State
-# -------------------------
-if "google_logged_in" not in st.session_state:
-    st.session_state.google_logged_in = False
 
-if "google_email" not in st.session_state:
-    st.session_state.google_email = None
-
-if "google_creds" not in st.session_state:
-    st.session_state.google_creds = None
 # -------------------------
 # Streamlit page config
 # -------------------------
@@ -34,48 +24,11 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
-# -------------------------
-# 🔐 AUTH GATE (LOGIN PAGE)
-# -------------------------
 
-# Handle OAuth callback ONLY if Google redirected back
-if "code" in st.query_params:
-    handle_callback()
-
-# If not logged in → show login page and STOP app
-if not st.session_state.get("google_logged_in", False):
-    st.markdown(
-        """
-        <div style="
-            max-width:420px;
-            margin:120px auto;
-            padding:30px;
-            border-radius:14px;
-            background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-            text-align:center;
-            box-shadow:0 6px 20px rgba(0,0,0,0.4);
-        ">
-            <h2 style="color:#00f7ff;">🔐 Login Required</h2>
-            <p style="color:#ddd;">
-                Please login with Google to access the Quantum Visualizer.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    login_button()   
-    st.stop()        
 # -------------------------
 # Persistent History Storage
 # -------------------------
-user_email = st.session_state.get("google_email", "guest")
-safe_email = user_email.replace("@", "_").replace(".", "_")
-USER_DIR = os.path.join("user_data", safe_email)
-
-os.makedirs(USER_DIR, exist_ok=True)
-
-HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
+HISTORY_FILE = "history.pkl"
 
 def save_history_to_disk():
     try:
@@ -312,8 +265,13 @@ def redo_qasm():
 st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
 st.sidebar.markdown("## Account")
-email = st.session_state.get("google_email", "Unknown user")
-st.sidebar.success(f"✅ Logged in as {email}")
+
+if "google_logged_in" not in st.session_state:
+    login_button()
+    handle_callback()
+else:
+    st.sidebar.success("Logged in with Google")
+
 
 
 def reset_app():
