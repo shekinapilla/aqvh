@@ -55,6 +55,26 @@ if "code" in st.query_params:
         st.query_params.clear()
 
 
+# -------------------------
+# LOGIN PAGE (ENTRY GATE)
+# -------------------------
+
+# Handle Google callback ONLY if redirected
+if "code" in st.query_params:
+    handle_callback()
+
+    if st.session_state.get("google_logged_in"):
+        st.session_state.auth_mode = "google"
+
+        # These must already be set inside handle_callback()
+        # Keeping here for clarity
+        # st.session_state["google_email"] = idinfo["email"]
+        # st.session_state["google_creds"] = creds
+        # st.session_state["google_logged_in"] = True
+
+        st.query_params.clear()
+
+
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
 
@@ -64,264 +84,85 @@ if st.session_state.auth_mode is None:
         /* Page background */
         .stApp {
             background: radial-gradient(circle at top, #0f2027, #000);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
         }
-        
-        /* Main container */
-        .main-login-container {
-            width: 100%;
-            max-width: 850px;
-            margin: 0 auto;
-            padding: 30px 20px;
-        }
-        
-        /* Quantum State Visualizer Box */
-        .title-box {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-            padding: 25px;
-            border-radius: 16px;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-            border: 1px solid rgba(0, 247, 255, 0.2);
-        }
-        
-        .title-box h1 {
-            color: #00f7ff;
-            margin: 0;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(0, 247, 255, 0.3);
-        }
-        
-        .title-box p {
-            color: #d0d0d0;
-            margin-top: 10px;
-            font-size: 16px;
-            opacity: 0.9;
-        }
-        
-        /* Login Card */
+
+        /* Login card */
         .login-card {
-            background: linear-gradient(145deg, #16222a, #3a6073);
-            padding: 40px;
+            max-width: 420px;
+            margin: 120px auto;
+            padding: 32px;
             border-radius: 18px;
+            background: linear-gradient(145deg, #16222a, #3a6073);
             box-shadow: 0 15px 40px rgba(0,0,0,0.6);
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        /* Login Title */
-        .login-title {
+
+        /* Title */
+        .login-card h2 {
             color: #00f7ff;
-            margin-bottom: 8px;
-            font-size: 24px;
-            font-weight: 600;
+            margin-bottom: 10px;
         }
-        
-        .login-subtitle {
+
+        /* Subtitle */
+        .login-card p {
             color: #d0d0d0;
             font-size: 14px;
-            margin-bottom: 30px;
-            opacity: 0.8;
+            margin-bottom: 22px;
         }
-        
-        /* Options Container */
-        .options-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            margin-top: 25px;
-        }
-        
-        /* Option Box */
-        .option-box {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-        }
-        
-        .option-box:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(0, 247, 255, 0.3);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-        
-        .option-title {
-            color: #ffffff;
-            font-size: 18px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .option-title i {
-            font-size: 20px;
-        }
-        
-        .option-desc {
-            color: #b0b0b0;
-            font-size: 13px;
-            margin-bottom: 15px;
-            line-height: 1.4;
-        }
-        
-        /* Google Button */
-        .google-btn-container {
-            display: flex;
-            justify-content: center;
-        }
-        
+
+        /* Google button */
         .google-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            display: block;
+            width: 100%;
+            padding: 14px;
+            margin: 14px 0;
+            border-radius: 10px;
             background: white;
             color: #444;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 10px;
             font-weight: 600;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            max-width: 250px;
             text-decoration: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
-        
+
         .google-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
         }
-        
-        /* Guest Button */
-        .guest-btn {
-            background: linear-gradient(135deg, #00f7ff, #0077ff);
-            color: black !important;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 10px;
-            font-weight: bold;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            max-width: 250px;
-            margin: 0 auto;
-        }
-        
-        .guest-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 119, 255, 0.3);
-        }
-        
-        /* Info Footer */
-        .info-footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+        /* OR divider */
+        .divider {
             color: #aaa;
-            font-size: 12px;
-            text-align: center;
+            margin: 16px 0;
+            font-size: 13px;
         }
-        
-        .info-footer p {
-            margin: 5px 0;
+
+        /* Guest button */
+        .guest-btn button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#00f7ff,#0077ff);
+            color: black;
+            font-weight: bold;
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-    
-    # Main container
-    st.markdown('<div class="main-login-container">', unsafe_allow_html=True)
-    
-    # Quantum State Visualizer Box
-    st.markdown("""
-    <div class="title-box">
-        <h1>Quantum State Visualizer</h1>
-        <p>Visualize quantum states on the Bloch sphere with real-time simulation</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Login Card
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
-    
-    st.markdown('<div class="login-title">🔐 Login</div>', unsafe_allow_html=True)
-    st.markdown('<div class="login-subtitle">Select your preferred authentication method</div>', unsafe_allow_html=True)
-    
-    # Options Container
-    st.markdown('<div class="options-container">', unsafe_allow_html=True)
-    
-    # Google Login Option
-    st.markdown("""
-    <div class="option-box">
-        <div class="option-title">
-            <span style="color: #4285F4;">🔗</span> Google Login
-        </div>
-        <div class="option-desc">
-            Securely login with your Google account. Your data will be saved and synced to Google Drive.
-        </div>
-        <div class="google-btn-container">
-    """, unsafe_allow_html=True)
-    
+
     # Google login button
     login_button()
-    
-    st.markdown("""
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Guest Login Option
-    st.markdown("""
-    <div class="option-box">
-        <div class="option-title">
-            <span style="color: #00f7ff;">👤</span> Guest Mode
-        </div>
-        <div class="option-desc">
-            Continue without signing in. Your data will be stored locally on this device only.
-        </div>
-        <div style="text-align: center;">
-    """, unsafe_allow_html=True)
-    
+
+    st.markdown("### OR")
+
     # Guest mode button
-    if st.button("Continue as Guest", key="guest_btn_main"):
+    if st.button("👤 Continue as Guest"):
         st.session_state.auth_mode = "guest"
         st.rerun()
-    
-    st.markdown("""
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)  # Close options-container
-    
-    # Info Footer
-    st.markdown("""
-    <div class="info-footer">
-        <p><strong>Google Login:</strong> Save & sync to Google Drive • Access from any device</p>
-        <p><strong>Guest Mode:</strong> Local storage only • Data persists only on this browser</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)  # Close login-card
-    st.markdown('</div>', unsafe_allow_html=True)  # Close main-login-container
 
     # ⛔ VERY IMPORTANT: Stop app execution here
     st.stop()
+
 
 # -------------------------
 # History Storage (Per Mode)
