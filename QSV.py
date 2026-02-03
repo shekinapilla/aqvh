@@ -36,118 +36,112 @@ st.set_page_config(
     layout="wide"
 )
 # -------------------------
-# LOGIN PAGE
+# LOGIN PAGE (ENTRY GATE)
 # -------------------------
 
-# Initialize auth_mode if not present
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = None
+# Handle Google callback ONLY if redirected
+if "code" in st.query_params:
+    handle_callback()
+
+    if st.session_state.get("google_logged_in"):
+        st.session_state.auth_mode = "google"
+
+        # These must already be set inside handle_callback()
+        # Keeping here for clarity
+        # st.session_state["google_email"] = idinfo["email"]
+        # st.session_state["google_creds"] = creds
+        # st.session_state["google_logged_in"] = True
+
+        st.query_params.clear()
 
 
-# ✅ If user already logged in → DO NOT show login page
-if st.session_state.auth_mode is not None:
-    st.success(f"Logged in as: {st.session_state.auth_mode}")
-    # Continue running your main app below
-    # ------------------------------------
-    st.write("🚀 App is running...")
+# If user not authenticated yet → show login page
+if st.session_state.auth_mode is None:
+
+    st.markdown(
+        """
+        <style>
+        /* Page background */
+        .stApp {
+            background: radial-gradient(circle at top, #0f2027, #000);
+        }
+
+        /* Login card */
+        .login-card {
+            max-width: 420px;
+            margin: 120px auto;
+            padding: 32px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #16222a, #3a6073);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            text-align: center;
+        }
+
+        /* Title */
+        .login-card h2 {
+            color: #00f7ff;
+            margin-bottom: 10px;
+        }
+
+        /* Subtitle */
+        .login-card p {
+            color: #d0d0d0;
+            font-size: 14px;
+            margin-bottom: 22px;
+        }
+
+        /* Google button */
+        .google-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            margin: 14px 0;
+            border-radius: 10px;
+            background: white;
+            color: #444;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        }
+
+        /* OR divider */
+        .divider {
+            color: #aaa;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        /* Guest button */
+        .guest-btn button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#00f7ff,#0077ff);
+            color: black;
+            font-weight: bold;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Google login button
+    login_button()
+
+    st.markdown("### OR")
+
+    # Guest mode button
+    if st.button("👤 Continue as Guest"):
+        st.session_state.auth_mode = "guest"
+        st.rerun()
+
+    # ⛔ VERY IMPORTANT: Stop app execution here
     st.stop()
-
-
-# -------------------------
-# SHOW LOGIN PAGE ONLY IF NOT AUTHENTICATED
-# -------------------------
-st.markdown(
-    """
-    <style>
-    /* Full page background */
-    .stApp {
-        background: linear-gradient(135deg, #1f1c2c, #928dab);
-    }
-
-    /* Login card */
-    .login-card {
-        max-width: 360px;
-        margin: 140px auto;
-        padding: 28px 26px 30px;
-        border-radius: 14px;
-        background: #f7f7f7;
-        box-shadow: 0 20px 45px rgba(0,0,0,0.35);
-        text-align: center;
-        font-family: "Segoe UI", sans-serif;
-    }
-
-    /* Login title */
-    .login-card h2 {
-        margin-bottom: 18px;
-        color: #333;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-
-    /* Button common */
-    .login-btn {
-        width: 100%;
-        padding: 12px;
-        margin-top: 14px;
-        border-radius: 25px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-    }
-
-    /* Google */
-    .google-btn {
-        background: white;
-        border: 1px solid #ccc;
-        color: #444;
-    }
-
-    /* Guest */
-    .guest-btn {
-        background: #eaeaea;
-        border: none;
-        color: #333;
-    }
-
-    .login-footer {
-        margin-top: 18px;
-        font-size: 12px;
-        color: #777;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# -------------------------
-# LOGIN CARD
-# -------------------------
-st.markdown('<div class="login-card">', unsafe_allow_html=True)
-
-st.markdown("<h2>Login</h2>", unsafe_allow_html=True)
-
-# Google login button
-login_button()   # must render inside card
-
-# Guest login
-if st.button("Continue as Guest", use_container_width=True):
-    st.session_state.auth_mode = "guest"
-    st.rerun()
-
-st.markdown(
-    """
-    <div class="login-footer">
-        Not a member? Signup
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ⛔ Stop execution so app doesn't continue
-st.stop()
-
 
 
 # -------------------------
