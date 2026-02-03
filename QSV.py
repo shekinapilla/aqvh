@@ -15,7 +15,17 @@ from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 
 
+# -------------------------
+# Initialize Auth Session State
+# -------------------------
+if "google_logged_in" not in st.session_state:
+    st.session_state.google_logged_in = False
 
+if "google_email" not in st.session_state:
+    st.session_state.google_email = None
+
+if "google_creds" not in st.session_state:
+    st.session_state.google_creds = None
 # -------------------------
 # Streamlit page config
 # -------------------------
@@ -28,8 +38,9 @@ st.set_page_config(
 # 🔐 AUTH GATE (LOGIN PAGE)
 # -------------------------
 
-# Handle OAuth callback FIRST
-handle_callback()
+# Handle OAuth callback ONLY if Google redirected back
+if "code" in st.query_params:
+    handle_callback()
 
 # If not logged in → show login page and STOP app
 if not st.session_state.get("google_logged_in", False):
@@ -58,7 +69,13 @@ if not st.session_state.get("google_logged_in", False):
 # -------------------------
 # Persistent History Storage
 # -------------------------
-HISTORY_FILE = "history.pkl"
+user_email = st.session_state.get("google_email", "guest")
+safe_email = user_email.replace("@", "_").replace(".", "_")
+USER_DIR = os.path.join("user_data", safe_email)
+
+os.makedirs(USER_DIR, exist_ok=True)
+
+HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
 
 def save_history_to_disk():
     try:
@@ -295,7 +312,8 @@ def redo_qasm():
 st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
 st.sidebar.markdown("## Account")
-st.sidebar.success(f"✅ Logged in as {st.session_state['google_email']}")
+email = st.session_state.get("google_email", "Unknown user")
+st.sidebar.success(f"✅ Logged in as {email}")
 
 
 def reset_app():
