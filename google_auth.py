@@ -5,6 +5,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from googleapiclient.http import MediaFileUpload
 
 SCOPES = [
     "openid",
@@ -99,49 +100,64 @@ def get_or_create_folder(service, name, parent_id=None):
 
     folder = service.files().create(body=metadata, fields="id").execute()
     return folder["id"]
+
 def upload_history_to_drive(local_file="history.pkl"):
-    """
-    Upload history.pkl to Google Drive under a folder named by user email
-    """
     if "google_creds" not in st.session_state:
+        st.warning("❌ No Google credentials")
         return
 
-    if "user_email" not in st.session_state:
+    if "google_email" not in st.session_state:
+        st.warning("❌ No Google email")
+        return
+
+    if not os.path.exists(local_file):
+        st.error(f"❌ File not found: {local_file}")
         return
 
     creds = st.session_state["google_creds"]
-    email = st.session_state["user_email"]
+    email = st.session_state["google_email"]
 
     drive = build("drive", "v3", credentials=creds)
 
-    # 1️⃣ Check if folder already exists
-    query = f"name='{email}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    results = drive.files().list(q=query, fields="files(id)").execute()
-    files = results.get("files", [])
+    # 1️⃣ App root folder
+    root_q = "name='QuantumVisualizer' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    root_res = drive.files().list(q=root_q, fields="files(id)").execute()
+    root_files = root_res.get("files", [])
 
-    if files:
-        folder_id = files[0]["id"]
+    if root_files:
+        root_id = root_files[0]["id"]
     else:
-        # 2️⃣ Create folder
-        folder_metadata = {
-            "name": email,
-            "mimeType": "application/vnd.google-apps.folder",
-        }
-        folder = drive.files().create(body=folder_metadata, fields="id").execute()
+        root = drive.files().create(
+            body={"name": "QuantumVisualizer", "mimeType": "application/vnd.google-apps.folder"},
+            fields="id"
+        ).execute()
+        root_id = root["id"]
+
+    # 2️⃣ User email folder
+    user_q = f"name='{email}' and mimeType='application/vnd.google-apps.folder' and '{root_id}' in parents and trashed=false"
+    user_res = drive.files().list(q=user_q, fields="files(id)").execute()
+    user_files = user_res.get("files", [])
+
+    if user_files:
+        folder_id = user_files[0]["id"]
+    else:
+        folder = drive.files().create(
+            body={
+                "name": email,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [root_id],
+            },
+            fields="id"
+        ).execute()
         folder_id = folder["id"]
 
-    # 3️⃣ Upload / overwrite history.pkl
-    from googleapiclient.http import MediaFileUpload
-
-    file_metadata = {
-        "name": "history.pkl",
-        "parents": [folder_id],
-    }
-
-    media = MediaFileUpload(local_file, resumable=True)
+    # 3️⃣ Upload file
+    media = MediaFileUpload(local_file, resumable=False)
 
     drive.files().create(
-        body=file_metadata,
+        body={"name": "history.pkl", "parents": [folder_id]},
         media_body=media,
         fields="id",
     ).execute()
+
+    st.success("✅ history.pkl uploaded to Google Drive")
