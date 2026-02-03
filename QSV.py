@@ -35,29 +35,29 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+# -------------------------
+# LOGIN PAGE (ENTRY GATE)
+# -------------------------
+
+# Handle Google callback ONLY if redirected
+if "code" in st.query_params:
+    handle_callback()
+
+    if st.session_state.get("google_logged_in"):
+        st.session_state.auth_mode = "google"
+
+        # These must already be set inside handle_callback()
+        # Keeping here for clarity
+        # st.session_state["google_email"] = idinfo["email"]
+        # st.session_state["google_creds"] = creds
+        # st.session_state["google_logged_in"] = True
+
+        st.query_params.clear()
+
+
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
 
-    # Title above login card
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        padding: 20px;
-        border-radius: 14px;
-        text-align: center;
-        margin-bottom: 40px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-    ">
-        <h1 style="color:#00f7ff; margin:0; font-family:Segoe UI, sans-serif; letter-spacing:1px;">
-            Quantum State Visualizer
-        </h1>
-        <p style="color:#d0d0d0; margin-top:10px;">
-            Visualize quantum states on the Bloch sphere
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Centered login card container
     st.markdown(
         """
         <style>
@@ -65,20 +65,11 @@ if st.session_state.auth_mode is None:
         .stApp {
             background: radial-gradient(circle at top, #0f2027, #000);
         }
-        
-        /* Centered container for login */
-        .login-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 60vh;
-            padding: 20px;
-        }
-        
+
         /* Login card */
         .login-card {
-            max-width: 400px;
-            width: 100%;
+            max-width: 420px;
+            margin: 120px auto;
             padding: 32px;
             border-radius: 18px;
             background: linear-gradient(145deg, #16222a, #3a6073);
@@ -86,18 +77,17 @@ if st.session_state.auth_mode is None:
             text-align: center;
         }
 
-        /* Title inside card */
+        /* Title */
         .login-card h2 {
             color: #00f7ff;
             margin-bottom: 10px;
-            font-size: 24px;
         }
 
         /* Subtitle */
         .login-card p {
             color: #d0d0d0;
             font-size: 14px;
-            margin-bottom: 25px;
+            margin-bottom: 22px;
         }
 
         /* Google button */
@@ -112,9 +102,6 @@ if st.session_state.auth_mode is None:
             font-weight: 600;
             text-decoration: none;
             transition: transform 0.15s ease, box-shadow 0.15s ease;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
         }
 
         .google-btn:hover {
@@ -124,79 +111,38 @@ if st.session_state.auth_mode is None:
 
         /* OR divider */
         .divider {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
             color: #aaa;
-        }
-        
-        .divider::before,
-        .divider::after {
-            content: "";
-            flex: 1;
-            border-bottom: 1px solid #555;
-        }
-        
-        .divider span {
-            padding: 0 15px;
-            font-size: 14px;
+            margin: 16px 0;
+            font-size: 13px;
         }
 
         /* Guest button */
         .guest-btn button {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             border-radius: 10px;
             background: linear-gradient(135deg,#00f7ff,#0077ff);
             color: black;
             font-weight: bold;
-            border: none;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.15s ease;
-        }
-        
-        .guest-btn button:hover {
-            transform: translateY(-2px);
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-    
-    # Centered login card using columns
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        
-        st.markdown('<h2>🔐 Login</h2>', unsafe_allow_html=True)
-        st.markdown('<p>Choose your authentication method</p>', unsafe_allow_html=True)
-        
-        # Google login button
-        login_button()
-        
-        st.markdown('<div class="divider"><span>OR</span></div>', unsafe_allow_html=True)
-        
-        # Guest mode button
-        st.markdown('<div class="guest-btn">', unsafe_allow_html=True)
-        if st.button("👤 Continue as Guest", use_container_width=True):
-            st.session_state.auth_mode = "guest"
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Additional info
-        st.markdown("""
-        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #444; color: #aaa; font-size: 12px;">
-        <p>• <strong>Google Login:</strong> Save & sync to Google Drive</p>
-        <p>• <strong>Guest Mode:</strong> Local storage only</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Google login button
+    login_button()
+
+    st.markdown("### OR")
+
+    # Guest mode button
+    if st.button("👤 Continue as Guest"):
+        st.session_state.auth_mode = "guest"
+        st.rerun()
 
     # ⛔ VERY IMPORTANT: Stop app execution here
     st.stop()
+
 # -------------------------
 # History Storage (Per Mode)
 # -------------------------
