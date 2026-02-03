@@ -73,3 +73,29 @@ def handle_callback():
     st.session_state["google_logged_in"] = True
 
     st.query_params.clear()
+
+def get_drive_service():
+    creds = st.session_state["google_creds"]
+    return build("drive", "v3", credentials=creds)
+
+
+def get_or_create_folder(service, name, parent_id=None):
+    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    if parent_id:
+        q += f" and '{parent_id}' in parents"
+
+    results = service.files().list(q=q, fields="files(id)").execute()
+    files = results.get("files", [])
+
+    if files:
+        return files[0]["id"]
+
+    metadata = {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder",
+    }
+    if parent_id:
+        metadata["parents"] = [parent_id]
+
+    folder = service.files().create(body=metadata, fields="id").execute()
+    return folder["id"]
