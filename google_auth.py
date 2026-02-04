@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from googleapiclient.http import MediaFileUpload
-import pickle
+import json
 
 SCOPES = [
     "openid",
@@ -49,12 +49,13 @@ def login_button():
     """, unsafe_allow_html=True)
 
 def handle_callback():
-    # 🔥 Only process if we have code AND not already logged in
+    # Only process if we have code AND not already logged in
     if "code" not in st.query_params:
         return
         
-    # 🔥 Check if we already processed this login
+    # Check if we already processed this login
     if st.session_state.get("login_processed"):
+        st.query_params.clear()
         return
         
     try:
@@ -76,7 +77,6 @@ def handle_callback():
         # Get state from session
         state = st.session_state.get("oauth_state", "")
         
-        # 🔥 FIX: Add state parameter
         flow.fetch_token(
             code=st.query_params["code"],
             state=state
@@ -91,7 +91,7 @@ def handle_callback():
             os.environ["GOOGLE_CLIENT_ID"],
         )
 
-        # 🔥 Store credentials securely
+        # Store credentials
         st.session_state["google_email"] = idinfo["email"]
         st.session_state["google_creds"] = {
             "token": creds.token,
@@ -104,18 +104,13 @@ def handle_callback():
         }
         st.session_state["google_logged_in"] = True
         st.session_state["auth_mode"] = "google"
-        st.session_state["login_processed"] = True  # Mark as processed
+        st.session_state["login_processed"] = True
         
-        # 🔥 Also save to browser's sessionStorage via JavaScript
-        st.markdown("""
-        <script>
-        localStorage.setItem('google_email', '""" + idinfo["email"] + """');
-        localStorage.setItem('auth_mode', 'google');
-        </script>
-        """, unsafe_allow_html=True)
-        
-        # Clear query params immediately
+        # Store login info in query params temporarily
         st.query_params.clear()
+        st.query_params["logged_in"] = "true"
+        st.query_params["auth_mode"] = "google"
+        st.query_params["email"] = idinfo["email"]
         
     except Exception as e:
         st.error(f"Login failed: {str(e)}")
@@ -124,34 +119,27 @@ def handle_callback():
             if key in st.session_state:
                 del st.session_state[key]
 
-def restore_login_from_storage():
-    """Restore login state from localStorage on page refresh"""
-    if not st.session_state.get("google_logged_in"):
-        st.markdown("""
-        <script>
-        // Check localStorage and set Streamlit session state
-        const email = localStorage.getItem('google_email');
-        const authMode = localStorage.getItem('auth_mode');
+def check_persistent_login():
+    """Check for persistent login via query params or session"""
+    # Check if we have login info in query params
+    if "logged_in" in st.query_params:
+        auth_mode = st.query_params.get("auth_mode")
+        email = st.query_params.get("email")
         
-        if (email && authMode === 'google') {
-            // Store in Streamlit's session state via JavaScript
-            window.streamlitSessionState = window.streamlitSessionState || {};
-            window.streamlitSessionState.google_email = email;
-            window.streamlitSessionState.auth_mode = authMode;
-            window.streamlitSessionState.google_logged_in = true;
-            
-            // Trigger a rerun
-            setTimeout(() => {
-                window.location.reload();
-            }, 100);
-        }
-        </script>
-        """, unsafe_allow_html=True)
-        
-        # Check if we have session state from JS
-        if st.session_state.get("google_email") and not st.session_state.get("google_logged_in"):
-            st.session_state.google_logged_in = True
+        if auth_mode == "google" and email:
             st.session_state.auth_mode = "google"
+            st.session_state.google_email = email
+            st.session_state.google_logged_in = True
+            
+            # Clear the query params
+            st.query_params.clear()
+            
+        elif auth_mode == "local" and email:
+            st.session_state.auth_mode = "local"
+            st.session_state.local_email = email
+            
+            # Clear the query params
+            st.query_params.clear()
 
 def get_drive_service():
     if "google_creds" not in st.session_state:
@@ -167,27 +155,6 @@ def get_drive_service():
         scopes=creds_data["scopes"]
     )
     return build("drive", "v3", credentials=creds)
-
-def get_or_create_folder(service, name, parent_id=None):
-    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    if parent_id:
-        q += f" and '{parent_id}' in parents"
-
-    results = service.files().list(q=q, fields="files(id)").execute()
-    files = results.get("files", [])
-
-    if files:
-        return files[0]["id"]
-
-    metadata = {
-        "name": name,
-        "mimeType": "application/vnd.google-apps.folder",
-    }
-    if parent_id:
-        metadata["parents"] = [parent_id]
-
-    folder = service.files().create(body=metadata, fields="id").execute()
-    return folder["id"]
 
 def upload_history_to_drive(local_file="history.pkl"):
     if "google_creds" not in st.session_state:
