@@ -60,7 +60,7 @@ def handle_callback():
     
     # 4. If this specific code has already been processed, stop.
     if st.session_state.get(lock_key):
-        st.query_params.clear()  # Clean up the URL
+        # Don't clear query params here, let main app handle it
         return
 
     # 5. Immediately set the lock BEFORE any network calls
@@ -83,12 +83,14 @@ def handle_callback():
         
         flow.redirect_uri = os.environ["REDIRECT_URI"]
         
-        # FIX: Add state parameter if available
+        # Add state parameter if available
         state = query_params.get("state")
-        token_response = flow.fetch_token(
-            code=incoming_code,
-            state=state
-        )
+        
+        # Fetch token with proper error handling
+        if state:
+            token_response = flow.fetch_token(code=incoming_code, state=state)
+        else:
+            token_response = flow.fetch_token(code=incoming_code)
         
         creds = flow.credentials
         
@@ -99,29 +101,25 @@ def handle_callback():
             os.environ["GOOGLE_CLIENT_ID"],
         )
 
-        # Only update session state on success
+        # Update session state on success
         st.session_state["google_email"] = idinfo["email"]
         st.session_state["google_creds"] = creds
         st.session_state["google_logged_in"] = True
         
-        # Clear the query parameters
-        st.query_params.clear()
+        # Success - don't do rerun here, let main app handle it
         
-        # Force a rerun to update the UI
-        st.rerun()
-
     except Exception as e:
         # On failure, clear the lock so the user can try again
         st.session_state.pop(lock_key, None)
-        st.error(f"Authentication failed: {str(e)}")
         
         # Log detailed error for debugging
         print(f"Google OAuth Error: {str(e)}")
-        print(f"Code used: {incoming_code[:20]}...")
+        if incoming_code:
+            print(f"Code used: {incoming_code[:20]}...")
         
-        # Clear query params to prevent infinite error loop
-        st.query_params.clear()
-    
+        # Re-raise the error so main app can handle it
+        raise e
+
 def get_drive_service():
     creds = st.session_state["google_creds"]
     return build("drive", "v3", credentials=creds)
