@@ -49,8 +49,8 @@ if "code" in st.query_params and not st.session_state.get("google_logged_in"):
 
     if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
-        st.query_params.clear()
-        st.rerun()   # 🔥 CRITICAL LINE
+        st.query_params.clear()   # ✅ clear FIRST
+        st.rerun()
 
 
 # If user not authenticated yet → show login page
@@ -466,11 +466,18 @@ elif st.session_state.auth_mode == "guest":
 
 if st.sidebar.button("🚪 Logout"):
     for k in [
-        "auth_mode", "google_logged_in", "google_email", "google_creds",
-        "initialized", "history", "saved_circuits"
+        "auth_mode",
+        "google_logged_in",
+        "google_email",
+        "google_creds",
+        "_oauth_handled",
+        "initialized",
+        "history",
+        "saved_circuits",
     ]:
         st.session_state.pop(k, None)
-    
+
+    st.query_params.clear()   # 🔥 REQUIRED
     st.rerun()
 
 def reset_app():
