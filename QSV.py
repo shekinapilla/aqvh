@@ -142,7 +142,7 @@ if st.session_state.auth_mode is None:
     </style>
     """, unsafe_allow_html=True)
     
-    logo_base64 = img_to_base64("logo_login.png")
+    logo_base64 = img_to_base64("logo.png")
 
     st.markdown(f"""
     <div class="login-wrapper">
