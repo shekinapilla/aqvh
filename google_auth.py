@@ -13,6 +13,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/drive.file",
 ]
+
 def login_button():
     flow = Flow.from_client_config(
         {
@@ -42,26 +43,30 @@ def login_button():
         </div>
     </a>
     """, unsafe_allow_html=True)
+
 def handle_callback():
+    """Handle Google OAuth callback with proper error handling"""
     query_params = st.query_params
     
     # 1. Exit immediately if there's no 'code' parameter
     if "code" not in query_params:
         return
 
-    # 2. CRITICAL: Create a unique lock key for this authorization code
+    # 2. Get the authorization code
     incoming_code = query_params["code"]
+    
+    # 3. Create a unique lock key for this authorization code
     lock_key = f"_oauth_handled_for_code_{incoming_code}"
     
-    # 3. If this specific code has already been processed, stop.
+    # 4. If this specific code has already been processed, stop.
     if st.session_state.get(lock_key):
-        st.query_params.clear() # Optional: clean up the URL
+        st.query_params.clear()  # Clean up the URL
         return
 
-    # 4. Immediately set the lock BEFORE any network calls
+    # 5. Immediately set the lock BEFORE any network calls
     st.session_state[lock_key] = True
     
-    # 5. Now proceed with the token exchange
+    # 6. Now proceed with the token exchange
     try:
         flow = Flow.from_client_config(
             {
@@ -75,29 +80,47 @@ def handle_callback():
             },
             scopes=SCOPES,
         )
+        
         flow.redirect_uri = os.environ["REDIRECT_URI"]
         
-        # This is the line that fails with 'invalid_grant'
-        flow.fetch_token(code=incoming_code)
+        # FIX: Add state parameter if available
+        state = query_params.get("state")
+        token_response = flow.fetch_token(
+            code=incoming_code,
+            state=state
+        )
         
         creds = flow.credentials
+        
+        # Verify the ID token
         idinfo = id_token.verify_oauth2_token(
             creds.id_token,
             requests.Request(),
             os.environ["GOOGLE_CLIENT_ID"],
         )
 
-        # 6. Only update session state on success
+        # Only update session state on success
         st.session_state["google_email"] = idinfo["email"]
         st.session_state["google_creds"] = creds
         st.session_state["google_logged_in"] = True
-        st.success("Google login successful!")
+        
+        # Clear the query parameters
+        st.query_params.clear()
+        
+        # Force a rerun to update the UI
+        st.rerun()
 
     except Exception as e:
-        # 7. On failure, clear the lock so the user can try again
+        # On failure, clear the lock so the user can try again
         st.session_state.pop(lock_key, None)
-        st.error(f"Authentication failed: {e}")
-        # Consider logging the full error for debugging
+        st.error(f"Authentication failed: {str(e)}")
+        
+        # Log detailed error for debugging
+        print(f"Google OAuth Error: {str(e)}")
+        print(f"Code used: {incoming_code[:20]}...")
+        
+        # Clear query params to prevent infinite error loop
+        st.query_params.clear()
     
 def get_drive_service():
     creds = st.session_state["google_creds"]
