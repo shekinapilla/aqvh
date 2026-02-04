@@ -16,13 +16,7 @@ from google_auth import upload_history_to_drive
 
 warnings.filterwarnings("ignore")
 import base64
-cookies = EncryptedCookieManager(
-    prefix="qsv_app",
-    password=os.environ.get("COOKIE_SECRET", "dev-secret")
-)
 
-if not cookies.ready():
-    st.stop()
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
@@ -50,7 +44,13 @@ st.set_page_config(
     layout="wide"
 )
 
+cookies = EncryptedCookieManager(
+    prefix="qsv_app",
+    password=os.environ.get("COOKIE_SECRET", "dev-secret")
+)
 
+if not cookies.ready():
+    st.stop()
 # 🔐 Auto-login from cookie
 if st.session_state.auth_mode in (None, "guest"):
     mode = cookies.get("auth_mode")
