@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from googleapiclient.http import MediaFileUpload
+import time
 
 SCOPES = [
     "openid",
@@ -29,11 +30,14 @@ def login_button():
     )
 
     flow.redirect_uri = os.environ["REDIRECT_URI"]
-    auth_url, _ = flow.authorization_url(
+    auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
+    
+    # Store state in session
+    st.session_state["oauth_state"] = state
 
     st.markdown(f"""
     <a href="{auth_url}" style="text-decoration:none;">
@@ -45,28 +49,24 @@ def login_button():
     """, unsafe_allow_html=True)
 
 def handle_callback():
-    """Handle Google OAuth callback with proper error handling"""
-    query_params = st.query_params
+    """Handle Google OAuth callback - SIMPLIFIED AND FIXED"""
+    query_params = st.query_params.to_dict()
     
-    # 1. Exit immediately if there's no 'code' parameter
+    # Exit if no code
     if "code" not in query_params:
         return
 
-    # 2. Get the authorization code
+    # Get the authorization code
     incoming_code = query_params["code"]
     
-    # 3. Create a unique lock key for this authorization code
-    lock_key = f"_oauth_handled_for_code_{incoming_code}"
+    # Check if we already processed this code
+    code_key = f"processed_code_{incoming_code}"
+    if st.session_state.get(code_key):
+        return  # Already processed
     
-    # 4. If this specific code has already been processed, stop.
-    if st.session_state.get(lock_key):
-        # Don't clear query params here, let main app handle it
-        return
-
-    # 5. Immediately set the lock BEFORE any network calls
-    st.session_state[lock_key] = True
+    # Mark as processed
+    st.session_state[code_key] = True
     
-    # 6. Now proceed with the token exchange
     try:
         flow = Flow.from_client_config(
             {
@@ -83,14 +83,11 @@ def handle_callback():
         
         flow.redirect_uri = os.environ["REDIRECT_URI"]
         
-        # Add state parameter if available
-        state = query_params.get("state")
+        # Get state from session or query params
+        state = query_params.get("state") or st.session_state.get("oauth_state")
         
-        # Fetch token with proper error handling
-        if state:
-            token_response = flow.fetch_token(code=incoming_code, state=state)
-        else:
-            token_response = flow.fetch_token(code=incoming_code)
+        # Fetch token
+        flow.fetch_token(code=incoming_code, state=state)
         
         creds = flow.credentials
         
@@ -101,24 +98,19 @@ def handle_callback():
             os.environ["GOOGLE_CLIENT_ID"],
         )
 
-        # Update session state on success
+        # Update session state
         st.session_state["google_email"] = idinfo["email"]
         st.session_state["google_creds"] = creds
         st.session_state["google_logged_in"] = True
         
-        # Success - don't do rerun here, let main app handle it
+        # Success
+        return True
         
     except Exception as e:
-        # On failure, clear the lock so the user can try again
-        st.session_state.pop(lock_key, None)
-        
-        # Log detailed error for debugging
-        print(f"Google OAuth Error: {str(e)}")
-        if incoming_code:
-            print(f"Code used: {incoming_code[:20]}...")
-        
-        # Re-raise the error so main app can handle it
-        raise e
+        st.error(f"Google authentication error: {str(e)}")
+        # Remove the processed flag so user can try again
+        st.session_state.pop(code_key, None)
+        return False
 
 def get_drive_service():
     creds = st.session_state["google_creds"]
