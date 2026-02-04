@@ -43,43 +43,61 @@ def login_button():
     </a>
     """, unsafe_allow_html=True)
 def handle_callback():
-    # 🔒 HARD LOCK — prevents double execution
-    if st.session_state.get("_oauth_handled"):
-        return
-
     query_params = st.query_params
+    
+    # 1. Exit immediately if there's no 'code' parameter
     if "code" not in query_params:
         return
 
-    st.session_state["_oauth_handled"] = True  # 🔐 lock immediately
+    # 2. CRITICAL: Create a unique lock key for this authorization code
+    incoming_code = query_params["code"]
+    lock_key = f"_oauth_handled_for_code_{incoming_code}"
+    
+    # 3. If this specific code has already been processed, stop.
+    if st.session_state.get(lock_key):
+        st.query_params.clear() # Optional: clean up the URL
+        return
 
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": os.environ["GOOGLE_CLIENT_ID"],
-                "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [os.environ["REDIRECT_URI"]],
-            }
-        },
-        scopes=SCOPES,
-    )
+    # 4. Immediately set the lock BEFORE any network calls
+    st.session_state[lock_key] = True
+    
+    # 5. Now proceed with the token exchange
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.environ["GOOGLE_CLIENT_ID"],
+                    "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [os.environ["REDIRECT_URI"]],
+                }
+            },
+            scopes=SCOPES,
+        )
+        flow.redirect_uri = os.environ["REDIRECT_URI"]
+        
+        # This is the line that fails with 'invalid_grant'
+        flow.fetch_token(code=incoming_code)
+        
+        creds = flow.credentials
+        idinfo = id_token.verify_oauth2_token(
+            creds.id_token,
+            requests.Request(),
+            os.environ["GOOGLE_CLIENT_ID"],
+        )
 
-    flow.redirect_uri = os.environ["REDIRECT_URI"]
-    flow.fetch_token(code=query_params["code"])
+        # 6. Only update session state on success
+        st.session_state["google_email"] = idinfo["email"]
+        st.session_state["google_creds"] = creds
+        st.session_state["google_logged_in"] = True
+        st.success("Google login successful!")
 
-    creds = flow.credentials
-
-    idinfo = id_token.verify_oauth2_token(
-        creds.id_token,
-        requests.Request(),
-        os.environ["GOOGLE_CLIENT_ID"],
-    )
-
-    st.session_state["google_email"] = idinfo["email"]
-    st.session_state["google_creds"] = creds
-    st.session_state["google_logged_in"] = True
+    except Exception as e:
+        # 7. On failure, clear the lock so the user can try again
+        st.session_state.pop(lock_key, None)
+        st.error(f"Authentication failed: {e}")
+        # Consider logging the full error for debugging
     
 def get_drive_service():
     creds = st.session_state["google_creds"]
