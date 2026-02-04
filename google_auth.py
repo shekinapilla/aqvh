@@ -34,8 +34,14 @@ def login_button():
         prompt="consent",
     )
 
-    st.markdown(f"### 🔐 [Login with Google]({auth_url})")
-
+    st.markdown(f"""
+    <a href="{auth_url}" style="text-decoration:none;">
+        <div class="google-login-btn">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg">
+            <span>Sign in with Google</span>
+        </div>
+    </a>
+    """, unsafe_allow_html=True)
 def handle_callback():
     if st.session_state.get("google_logged_in"):
         return
