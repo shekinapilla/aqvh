@@ -25,9 +25,6 @@ def img_to_base64(path):
 # Global Auth State
 # -------------------------
 if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = None
-
-if st.session_state.auth_mode is None:
     st.session_state.auth_mode = "guest"
 
 if "google_logged_in" not in st.session_state:
@@ -35,6 +32,9 @@ if "google_logged_in" not in st.session_state:
 
 if "google_email" not in st.session_state:
     st.session_state.google_email = None
+
+if "google_creds" not in st.session_state:
+    st.session_state.google_creds = None
 
 # -------------------------
 # Streamlit page config
@@ -71,10 +71,10 @@ if st.session_state.auth_mode in (None, "guest"):
 # -------------------------
 
 # Handle Google callback ONLY if redirected
-if "code" in st.query_params and not st.session_state.get("google_logged_in"):
+if st.session_state.auth_mode == "guest" and not st.session_state.google_logged_in:
     handle_callback()
 
-    if st.session_state.get("google_logged_in"):
+    if st.session_state.google_logged_in:
         st.session_state.auth_mode = "google"
 
         cookies["auth_mode"] = "google"
@@ -519,26 +519,23 @@ elif st.session_state.auth_mode == "guest":
 
 if st.sidebar.button("🚪 Logout"):
 
-    # Mark logout state
-    st.session_state.logout_in_progress = True
-
     # Clear cookies
     cookies["auth_mode"] = ""
     cookies["email"] = ""
     cookies.save()
 
-    # Reset auth state
+    # Reset auth
     st.session_state.auth_mode = "guest"
     st.session_state.google_logged_in = False
     st.session_state.google_email = None
     st.session_state.google_creds = None
     st.session_state.local_email = None
 
-    # Reset OAuth guard
+    # Clear OAuth state
     if "oauth_handled" in st.session_state:
         del st.session_state.oauth_handled
 
-    # Clear URL params
+    # Clear URL
     st.query_params.clear()
 
     # Reset app state
