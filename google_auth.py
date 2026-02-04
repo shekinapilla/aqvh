@@ -43,12 +43,18 @@ def login_button():
     </a>
     """, unsafe_allow_html=True)
 def handle_callback():
+
     if st.session_state.get("google_logged_in"):
+        return
+
+    if st.session_state.get("oauth_handled"):
         return
 
     query_params = st.query_params
     if "code" not in query_params:
         return
+
+    st.session_state.oauth_handled = True
 
     flow = Flow.from_client_config(
         {
@@ -68,16 +74,15 @@ def handle_callback():
 
     creds = flow.credentials
 
-    # ✅ Decode ID token to get email
     idinfo = id_token.verify_oauth2_token(
         creds.id_token,
         requests.Request(),
         os.environ["GOOGLE_CLIENT_ID"],
     )
 
-    st.session_state["google_email"] = idinfo["email"]
-    st.session_state["google_creds"] = creds
-    st.session_state["google_logged_in"] = True
+    st.session_state.google_email = idinfo["email"]
+    st.session_state.google_creds = creds
+    st.session_state.google_logged_in = True
 
     st.query_params.clear()
     
