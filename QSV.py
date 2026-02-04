@@ -58,89 +58,100 @@ if "code" in st.query_params:
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None:
 
-    st.markdown(
-        """
-        <style>
-        /* Page background */
-        .stApp {
-            background: radial-gradient(circle at top, #0f2027, #000);
-        }
-
-        /* Login card */
-        .login-card {
-            max-width: 420px;
-            margin: 120px auto;
-            padding: 32px;
-            border-radius: 18px;
-            background: linear-gradient(145deg, #16222a, #3a6073);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
-            text-align: center;
-        }
-
-        /* Title */
-        .login-card h2 {
-            color: #00f7ff;
-            margin-bottom: 10px;
-        }
-
-        /* Subtitle */
-        .login-card p {
-            color: #d0d0d0;
-            font-size: 14px;
-            margin-bottom: 22px;
-        }
-
-        /* Google button */
-        .google-btn {
-            display: block;
-            width: 100%;
-            padding: 14px;
-            margin: 14px 0;
-            border-radius: 10px;
-            background: white;
-            color: #444;
-            font-weight: 600;
-            text-decoration: none;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .google-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
-        }
-
-        /* OR divider */
-        .divider {
-            color: #aaa;
-            margin: 16px 0;
-            font-size: 13px;
-        }
-
-        /* Guest button */
-        .guest-btn button {
-            width: 100%;
-            padding: 12px;
-            border-radius: 10px;
-            background: linear-gradient(135deg,#00f7ff,#0077ff);
-            color: black;
-            font-weight: bold;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # Google login button
-    login_button()
-
-    st.markdown("### OR")
-
-    # Guest mode button
-    if st.button("👤 Continue as Guest"):
-        st.session_state.auth_mode = "guest"
-        st.rerun()
-
-    # ⛔ VERY IMPORTANT: Stop app execution here
+    # -------------------------
+    # GOOGLE-LIKE LOGIN PAGE
+    # -------------------------
+    
+    st.markdown("""
+    <style>
+    body {
+        background-color: #f5f6fa;
+    }
+    .login-wrapper {
+        display: flex;
+        justify-content: center;
+        margin-top: 90px;
+    }
+    .login-card {
+        width: 420px;
+        padding: 32px;
+        border-radius: 14px;
+        background: white;
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.15);
+    }
+    .login-title {
+        font-size: 26px;
+        font-weight: 600;
+        text-align: center;
+    }
+    .login-sub {
+        text-align: center;
+        color: #777;
+        margin-bottom: 24px;
+    }
+    .divider {
+        text-align: center;
+        margin: 20px 0;
+        color: #999;
+    }
+    .google-btn {
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+    }
+    .footer-text {
+        text-align: center;
+        margin-top: 18px;
+        font-size: 14px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-title">Welcome</div>
+            <div class="login-sub">We are happy to have you back!</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # --- Inputs ---
+    email = st.text_input("Email or phone")
+    password = st.text_input("Password", type="password")
+    
+    col1, col2 = st.columns([1,1])
+    with col1:
+        remember = st.checkbox("Remember me")
+    with col2:
+        st.markdown("<div style='text-align:right; margin-top:30px;'>Forgot password?</div>",
+                    unsafe_allow_html=True)
+    
+    # --- Sign in button ---
+    if st.button("Sign In", use_container_width=True):
+        if email and password:
+            st.session_state.auth_mode = "local"
+            st.session_state.local_email = email
+            st.success("✅ Logged in")
+            st.rerun()
+        else:
+            st.error("❌ Please enter email and password")
+    
+    # --- Divider ---
+    st.markdown("<div class='divider'>— Or —</div>", unsafe_allow_html=True)
+    
+    # --- Google Sign-in ---
+    login_button()   # ← your existing Google OAuth button
+    
+    # --- Footer ---
+    st.markdown("""
+    <div class="footer-text">
+        Don’t have an account? <b>Sign up</b>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.stop()
 
 
