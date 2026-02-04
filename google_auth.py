@@ -1,10 +1,10 @@
-# google_auth.py
 import streamlit as st
 import os
 from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from google.oauth2 import id_token
 from google.auth.transport import requests
-from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = [
@@ -13,8 +13,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/drive.file",
 ]
-
-def _flow():
+def login_button():
     flow = Flow.from_client_config(
         {
             "web": {
@@ -27,69 +26,98 @@ def _flow():
         },
         scopes=SCOPES,
     )
+
     flow.redirect_uri = os.environ["REDIRECT_URI"]
-    return flow
-
-
-def login_button():
-    flow = _flow()
-
-    # 🔴 IMPORTANT FIX: online access only
-    auth_url, state = flow.authorization_url(
-        access_type="online",
-        prompt="select_account",
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
         include_granted_scopes="true",
+        prompt="consent",
     )
 
-    st.session_state["oauth_state"] = state
-
-    st.markdown(
-        f"""
-        <a href="{auth_url}" style="text-decoration:none;">
-            <div class="google-login-btn">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg">
-                <span>Sign in with Google</span>
-            </div>
-        </a>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
+    st.markdown(f"""
+    <a href="{auth_url}" style="text-decoration:none;">
+        <div class="google-login-btn">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg">
+            <span>Sign in with Google</span>
+        </div>
+    </a>
+    """, unsafe_allow_html=True)
 def handle_callback():
-    # 🔒 HARD STOP: never re-handle OAuth
     if st.session_state.get("google_logged_in"):
-        return True
+        return
 
-    qp = st.query_params
-    if "code" not in qp:
-        return False
+    query_params = st.query_params
+    if "code" not in query_params:
+        return
 
-    try:
-        flow = _flow()
-        flow.fetch_token(code=qp["code"])
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": os.environ["GOOGLE_CLIENT_ID"],
+                "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [os.environ["REDIRECT_URI"]],
+            }
+        },
+        scopes=SCOPES,
+    )
 
-        creds = flow.credentials
+    flow.redirect_uri = os.environ["REDIRECT_URI"]
+    flow.fetch_token(code=query_params["code"])
 
-        idinfo = id_token.verify_oauth2_token(
-            creds.id_token,
-            requests.Request(),
-            os.environ["GOOGLE_CLIENT_ID"],
-        )
+    creds = flow.credentials
 
-        st.session_state.google_logged_in = True
-        st.session_state.google_email = idinfo["email"]
-        st.session_state.google_creds = creds
+    # ✅ Decode ID token to get email
+    idinfo = id_token.verify_oauth2_token(
+        creds.id_token,
+        requests.Request(),
+        os.environ["GOOGLE_CLIENT_ID"],
+    )
 
-        return True
+    st.session_state["google_email"] = idinfo["email"]
+    st.session_state["google_creds"] = creds
+    st.session_state["google_logged_in"] = True
 
-    except Exception as e:
-        st.error(f"Google authentication error: {e}")
-        return False
+    st.query_params.clear()
+    
+def get_drive_service():
+    creds = st.session_state["google_creds"]
+    return build("drive", "v3", credentials=creds)
 
 
-def upload_history_to_drive(local_file):
-    if not st.session_state.get("google_logged_in"):
+def get_or_create_folder(service, name, parent_id=None):
+    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    if parent_id:
+        q += f" and '{parent_id}' in parents"
+
+    results = service.files().list(q=q, fields="files(id)").execute()
+    files = results.get("files", [])
+
+    if files:
+        return files[0]["id"]
+
+    metadata = {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder",
+    }
+    if parent_id:
+        metadata["parents"] = [parent_id]
+
+    folder = service.files().create(body=metadata, fields="id").execute()
+    return folder["id"]
+
+def upload_history_to_drive(local_file="history.pkl"):
+    if "google_creds" not in st.session_state:
+        st.warning("❌ No Google credentials")
+        return
+
+    if "google_email" not in st.session_state:
+        st.warning("❌ No Google email")
+        return
+
+    if not os.path.exists(local_file):
+        st.error(f"❌ File not found: {local_file}")
         return
 
     creds = st.session_state["google_creds"]
@@ -97,25 +125,27 @@ def upload_history_to_drive(local_file):
 
     drive = build("drive", "v3", credentials=creds)
 
+    # 1️⃣ App root folder
     root_q = "name='QuantumVisualizer' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    res = drive.files().list(q=root_q, fields="files(id)").execute()
-    files = res.get("files", [])
+    root_res = drive.files().list(q=root_q, fields="files(id)").execute()
+    root_files = root_res.get("files", [])
 
-    if files:
-        root_id = files[0]["id"]
+    if root_files:
+        root_id = root_files[0]["id"]
     else:
         root = drive.files().create(
             body={"name": "QuantumVisualizer", "mimeType": "application/vnd.google-apps.folder"},
-            fields="id",
+            fields="id"
         ).execute()
         root_id = root["id"]
 
-    user_q = f"name='{email}' and '{root_id}' in parents and trashed=false"
-    res = drive.files().list(q=user_q, fields="files(id)").execute()
-    files = res.get("files", [])
+    # 2️⃣ User email folder
+    user_q = f"name='{email}' and mimeType='application/vnd.google-apps.folder' and '{root_id}' in parents and trashed=false"
+    user_res = drive.files().list(q=user_q, fields="files(id)").execute()
+    user_files = user_res.get("files", [])
 
-    if files:
-        folder_id = files[0]["id"]
+    if user_files:
+        folder_id = user_files[0]["id"]
     else:
         folder = drive.files().create(
             body={
@@ -123,12 +153,17 @@ def upload_history_to_drive(local_file):
                 "mimeType": "application/vnd.google-apps.folder",
                 "parents": [root_id],
             },
-            fields="id",
+            fields="id"
         ).execute()
         folder_id = folder["id"]
 
+    # 3️⃣ Upload file
     media = MediaFileUpload(local_file, resumable=False)
+
     drive.files().create(
         body={"name": "history.pkl", "parents": [folder_id]},
         media_body=media,
+        fields="id",
     ).execute()
+
+    st.success("✅ history.pkl uploaded to Google Drive")s
