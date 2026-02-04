@@ -14,7 +14,11 @@ import warnings
 from google_auth import login_button, handle_callback
 from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
+import base64
 
+def img_to_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
 # -------------------------
 # Global Auth State
 # -------------------------
@@ -138,11 +142,13 @@ if st.session_state.auth_mode is None:
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("""
+    logo_base64 = img_to_base64("logo_login.png")
+
+    st.markdown(f"""
     <div class="login-wrapper">
         <div class="login-card">
             <div class="login-logo">
-                <img src="logo_login.png" />
+                <img src="data:image/png;base64,{logo_base64}" width="70"/>
             </div>
             <div class="login-title">Welcome</div>
             <div class="login-sub">We are happy to have you back!</div>
