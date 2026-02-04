@@ -1,3 +1,4 @@
+
 import streamlit as st
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, partial_trace
@@ -18,35 +19,24 @@ import base64
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
+# -------------------------
+# Global Auth State
+# -------------------------
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = None   # None | "google" | "guest"
 
-# -------------------------
-# Session State Initialization
-# -------------------------
-if "initialized" not in st.session_state:
-    st.session_state.initialized = True
-    
-    # Authentication states
-    st.session_state.auth_mode = None  # None | "google" | "local" | "guest"
+if "google_logged_in" not in st.session_state:
     st.session_state.google_logged_in = False
-    st.session_state.google_email = None
-    st.session_state.local_email = None
-    st.session_state.user_email = None
-    
-    # App states
-    st.session_state.history = []
-    st.session_state.saved_circuits = []
-    st.session_state.n_qubits = 1
-    st.session_state.manual_ops = []
-    st.session_state.manual_qc = QuantumCircuit(1)
-    st.session_state.uploaded_qc = None
-    st.session_state.mode = "manual"
-    st.session_state.editable_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];"
-    st.session_state.qasm_history = [st.session_state.editable_qasm]
-    st.session_state.qasm_redo = []
-    st.session_state.manual_ops_history = [[]]
-    st.session_state.manual_ops_pointer = 0
-    st.session_state.uploaded_file_name = None
 
+if "google_email" not in st.session_state:
+    st.session_state.google_email = None
+# -------------------------
+# 🔒 HARD BLOCK: Prevent OAuth re-run on refresh
+# -------------------------
+if st.session_state.get("google_logged_in"):
+    if "code" in st.query_params:
+        st.query_params.clear()
+        st.stop()
 # -------------------------
 # Streamlit page config
 # -------------------------
@@ -55,80 +45,129 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+# -------------------------
+# LOGIN PAGE (ENTRY GATE)
+# -------------------------
+# -------------------------
+# ✅ Handle Google OAuth callback (ONCE ONLY)
+# -------------------------
+if "code" in st.query_params and not st.session_state.get("google_logged_in"):
+    success = handle_callback()
 
-# -------------------------
-# Handle Google Callback - SIMPLE AND WORKING
-# -------------------------
-# First check: if code is in URL, handle it immediately
-query_params = st.query_params.to_dict()
-
-if "code" in query_params:
-    # Get the code from URL
-    auth_code = query_params["code"]
-    
-    # Clear the URL immediately
-    st.query_params.clear()
-    
-    # Store code in session to process once
-    if "pending_auth_code" not in st.session_state:
-        st.session_state.pending_auth_code = auth_code
-        
-    # Process the auth code
-    if st.session_state.get("pending_auth_code"):
-        try:
-            success = handle_callback()
-            if success:
-                st.session_state.auth_mode = "google"
-                st.session_state.user_email = st.session_state.google_email
-                st.session_state.pending_auth_code = None
-                st.rerun()
-            else:
-                st.error("Google login failed. Please try again.")
-                st.session_state.pending_auth_code = None
-        except Exception as e:
-            st.error(f"Login error: {e}")
-            st.session_state.pending_auth_code = None
-
-# -------------------------
-# Check if user is logged in
-# -------------------------
-def is_user_logged_in():
-    """Check if user is logged in via any method"""
-    # Google login
-    if st.session_state.get("google_logged_in") and st.session_state.get("google_email"):
+    if success:
         st.session_state.auth_mode = "google"
-        return True
-    
-    # Local login
-    if st.session_state.get("local_email"):
-        st.session_state.auth_mode = "local"
-        return True
-    
-    # Guest mode
-    if st.session_state.get("auth_mode") == "guest":
-        return True
-    
-    return False
 
-# If not logged in, show login page
-if not is_user_logged_in():
+        # 🔥 Remove OAuth code from browser URL permanently
+        st.components.v1.html(
+            """
+            <script>
+              window.history.replaceState({}, document.title, window.location.pathname);
+            </script>
+            """,
+            height=0,
+        )
+
+        st.rerun()
+
+# If user not authenticated yet → show login page
+if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
+
     # -------------------------
-    # LOGIN PAGE
+    # GOOGLE-LIKE LOGIN PAGE
     # -------------------------
+    
     st.markdown("""
     <style>
-    body { background-color: #0e0e0e; color: #eaeaea; }
-    .login-wrapper { display: flex; justify-content: center; margin-top: 90px; }
-    .login-card { width: 420px; padding: 32px; border-radius: 14px; background: #1a1a1a; box-shadow: 0px 10px 30px rgba(0,0,0,0.6); }
-    .login-title { font-size: 26px; font-weight: 600; text-align: center; color: #ffffff; }
-    .login-sub { text-align: center; color: #bbbbbb; margin-bottom: 24px; }
-    .divider { text-align: center; margin: 20px 0; color: #888; }
-    .footer-text { text-align: center; margin-top: 18px; font-size: 14px; color: #aaa; }
-    .login-logo { display: flex; justify-content: center; margin-bottom: 10px; }
-    .google-login-btn { display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #333; border-radius: 8px; padding: 10px; background: #111; font-weight: 500; color: #eaeaea; transition: background 0.2s ease; }
-    .google-login-btn:hover { background: #222; }
-    .google-login-btn img { width: 18px; height: 18px; }
-    input { background-color: #111 !important; color: #fff !important; border: 1px solid #333 !important; }
+    
+    /* Full page background */
+    body {
+        background-color: #0e0e0e;
+        color: #eaeaea;
+    }
+    
+    /* Center wrapper */
+    .login-wrapper {
+        display: flex;
+        justify-content: center;
+        margin-top: 90px;
+    }
+    
+    /* Login card */
+    .login-card {
+        width: 420px;
+        padding: 32px;
+        border-radius: 14px;
+        background: #1a1a1a;
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.6);
+    }
+    
+    /* Title & subtitle */
+    .login-title {
+        font-size: 26px;
+        font-weight: 600;
+        text-align: center;
+        color: #ffffff;
+    }
+    
+    .login-sub {
+        text-align: center;
+        color: #bbbbbb;
+        margin-bottom: 24px;
+    }
+    
+    /* Divider */
+    .divider {
+        text-align: center;
+        margin: 20px 0;
+        color: #888;
+    }
+    
+    /* Footer text */
+    .footer-text {
+        text-align: center;
+        margin-top: 18px;
+        font-size: 14px;
+        color: #aaa;
+    }
+    
+    /* Logo */
+    .login-logo {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    
+    /* Google button container */
+    .google-login-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px;
+        background: #111;
+        font-weight: 500;
+        color: #eaeaea;
+        transition: background 0.2s ease;
+    }
+    
+    .google-login-btn:hover {
+        background: #222;
+    }
+    
+    .google-login-btn img {
+        width: 18px;
+        height: 18px;
+    }
+    
+    /* Inputs */
+    input {
+        background-color: #111 !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
     
@@ -162,7 +201,6 @@ if not is_user_logged_in():
         if email and password:
             st.session_state.auth_mode = "local"
             st.session_state.local_email = email
-            st.session_state.user_email = email
             st.success("✅ Logged in")
             st.rerun()
         else:
@@ -172,39 +210,29 @@ if not is_user_logged_in():
     st.markdown("<div class='divider'>— Or —</div>", unsafe_allow_html=True)
     
     # --- Google Sign-in ---
-    login_button()
-    
-    # --- Guest Login ---
-    if st.button("👤 Continue as Guest", use_container_width=True):
-        st.session_state.auth_mode = "guest"
-        st.rerun()
+    login_button()   # ← your existing Google OAuth button
     
     # --- Footer ---
     st.markdown("""
     <div class="footer-text">
-        Don't have an account? <b>Sign up</b>
+        Don’t have an account? <b>Sign up</b>
     </div>
     """, unsafe_allow_html=True)
     
     st.stop()
 
-# -------------------------
-# User is logged in - Show Main App
-# -------------------------
 
-# Determine user directory based on auth mode
-if st.session_state.auth_mode == "google" and st.session_state.google_email:
+# -------------------------
+# History Storage (Per Mode)
+# -------------------------
+if st.session_state.auth_mode == "google":
     safe_email = st.session_state.google_email.replace("@", "_").replace(".", "_")
-    USER_DIR = os.path.join("user_data", safe_email)
-elif st.session_state.auth_mode == "local" and st.session_state.local_email:
-    safe_email = st.session_state.local_email.replace("@", "_").replace(".", "_")
     USER_DIR = os.path.join("user_data", safe_email)
 else:
     USER_DIR = os.path.join("user_data", "guest")
 
 os.makedirs(USER_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
-
 def save_history_to_disk():
     try:
         with open(HISTORY_FILE, "wb") as f:
@@ -216,13 +244,19 @@ def save_history_to_disk():
                 f
             )
 
-        if (st.session_state.auth_mode == "google" and st.session_state.get("google_logged_in") 
-            and st.session_state.get("google_creds")):
+        # 🔥 Step 3 trigger: upload per user
+        if (
+            st.session_state.auth_mode == "google"
+            and st.session_state.get("google_logged_in")
+            and st.session_state.get("google_creds")
+        ):
             upload_history_to_drive(HISTORY_FILE)
+
     except Exception as e:
         st.sidebar.error(f"Failed saving history to disk: {e}")
 
 def load_history_from_disk():
+    """Loads history from the pickle file if it exists."""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "rb") as f:
@@ -233,13 +267,32 @@ def load_history_from_disk():
             st.session_state.history = []
             st.session_state.saved_circuits = []
 
-if len(st.session_state.history) == 0:
+# -------------------------
+# Initialize session states
+# -------------------------
+if "initialized" not in st.session_state:
+    st.session_state.history = []
+    st.session_state.saved_circuits = []
+    st.session_state.n_qubits = 1
+    st.session_state.manual_ops = []
+    st.session_state.manual_qc = QuantumCircuit(1)
+    st.session_state.uploaded_qc = None
+    st.session_state.mode = "manual"
+    st.session_state.editable_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];"
+    st.session_state.qasm_history = [st.session_state.editable_qasm]
+    st.session_state.qasm_redo = []
+    st.session_state.manual_ops_history = [[]]
+    st.session_state.manual_ops_pointer = 0
+    st.session_state.uploaded_file_name = None
+
     load_history_from_disk()
+    st.session_state.initialized = True
 
 # -------------------------
-# Helper functions (UNCHANGED)
+# Helper functions
 # -------------------------
 def to_matrix_2x2(rho):
+    """Converts a density matrix object to a 2x2 numpy array."""
     if hasattr(rho, "data"):
         mat = np.asarray(rho.data)
     elif hasattr(rho, "to_matrix"):
@@ -249,6 +302,7 @@ def to_matrix_2x2(rho):
     return mat.reshape((2, 2))
 
 def bloch_vector_from_rho_mat(rho_mat):
+    """Calculates the Bloch vector from a 2x2 density matrix."""
     X = np.array([[0, 1], [1, 0]], dtype=complex)
     Y = np.array([[0, -1j], [1j, 0]], dtype=complex)
     Z = np.array([[1, 0], [0, -1]], dtype=complex)
@@ -258,9 +312,11 @@ def bloch_vector_from_rho_mat(rho_mat):
     return np.array([bx, by, bz])
 
 def purity_from_rho_mat(rho_mat):
+    """Calculates the purity of a state from its density matrix."""
     return float(np.real_if_close(np.trace(rho_mat @ rho_mat)))
 
 def plot_bloch_vector(bvec, title="Bloch Sphere"):
+    """Generates a 3D plot of a Bloch vector on the Bloch sphere."""
     fig = plt.figure(figsize=(2.5, 2.5), dpi=180)
     ax = fig.add_subplot(111, projection='3d')
     u, v = np.mgrid[0:2*np.pi:80j, 0:np.pi:40j]
@@ -277,6 +333,7 @@ def plot_bloch_vector(bvec, title="Bloch Sphere"):
     return fig
 
 def add_history_entry(name, qc_obj, ops_list):
+    """Adds a new circuit to the history session state and saves to disk."""
     st.session_state.history.append(name)
     try:
         st.session_state.saved_circuits.append({
@@ -289,6 +346,7 @@ def add_history_entry(name, qc_obj, ops_list):
     save_history_to_disk()
 
 def rebuild_manual_qc():
+    """Rebuilds the manual QuantumCircuit object from the list of operations."""
     n = st.session_state.n_qubits
     qc = QuantumCircuit(n)
     skipped = []
@@ -326,12 +384,14 @@ def rebuild_manual_qc():
     return skipped
 
 def safe_get_qasm(qc: QuantumCircuit):
+    """Safely generates QASM 2.0 string from a QuantumCircuit."""
     try:
         return dumps2(qc)
     except Exception as e:
         return f"# Failed to generate QASM: {e}"
 
 def remove_classical_instructions(qc: QuantumCircuit) -> QuantumCircuit:
+    """Creates a new circuit containing only the quantum instructions."""
     new_qc = QuantumCircuit(qc.num_qubits)
     for instr, qargs, cargs in qc.data:
         if instr.name not in ["measure", "reset", "barrier"]:
@@ -339,12 +399,14 @@ def remove_classical_instructions(qc: QuantumCircuit) -> QuantumCircuit:
     return new_qc
 
 def push_manual_ops_state():
+    """Pushes the current manual operations list to its history stack for undo/redo."""
     ops_copy = pickle.loads(pickle.dumps(st.session_state.manual_ops))
     st.session_state.manual_ops_history = st.session_state.manual_ops_history[:st.session_state.manual_ops_pointer+1]
     st.session_state.manual_ops_history.append(ops_copy)
     st.session_state.manual_ops_pointer += 1
 
 def update_circuit_from_qasm_callback():
+    """Parses QASM from the text area and updates the uploaded_qc state."""
     edited_qasm = st.session_state.editable_qasm_area
     try:
         updated_qc = QuantumCircuit.from_qasm_str(edited_qasm)
@@ -359,6 +421,7 @@ def update_circuit_from_qasm_callback():
         st.session_state.uploaded_qc = None
 
 def handle_file_upload_callback():
+    """Handles logic when a new file is uploaded."""
     uploaded_file = st.session_state.file_uploader
     if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded_file_name:
         try:
@@ -370,13 +433,16 @@ def handle_file_upload_callback():
             st.session_state.qasm_redo = []
             st.session_state.uploaded_file_name = uploaded_file.name
             st.success("✅ QASM file loaded!")
+            
         except Exception as e:
             st.error(f"❌ Failed to load QASM: {e}")
             st.session_state.uploaded_qc = None
             st.session_state.mode = "manual"
             st.session_state.uploaded_file_name = None
+            
 
 def undo_qasm():
+    """Undoes the last QASM change by reverting to the previous state in history."""
     if st.session_state.qasm_history and len(st.session_state.qasm_history) > 1:
         st.session_state.qasm_redo.append(st.session_state.qasm_history.pop())
         st.session_state.editable_qasm = st.session_state.qasm_history[-1]
@@ -385,8 +451,10 @@ def undo_qasm():
             st.session_state.mode = "qasm"
         except Exception:
             st.session_state.uploaded_qc = None
+    
 
 def redo_qasm():
+    """Redoes the last QASM undo by moving a state from redo stack to history."""
     if st.session_state.qasm_redo:
         next_qasm = st.session_state.qasm_redo.pop()
         st.session_state.qasm_history.append(next_qasm)
@@ -396,6 +464,7 @@ def redo_qasm():
             st.session_state.mode = "qasm"
         except Exception:
             st.session_state.uploaded_qc = None
+    
 
 # -------------------------
 # Sidebar
@@ -404,22 +473,28 @@ st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
 st.sidebar.markdown("## Account")
 
-if st.session_state.auth_mode == "google" and st.session_state.google_email:
+if st.session_state.auth_mode == "google":
     st.sidebar.success(f"✅ Google: {st.session_state.google_email}")
-elif st.session_state.auth_mode == "local" and st.session_state.local_email:
-    st.sidebar.success(f"✅ Local: {st.session_state.local_email}")
-elif st.session_state.auth_mode == "guest":
-    st.sidebar.info("👤 Guest mode")
 
-def perform_logout():
-    for key in list(st.session_state.keys()):
-        if key not in ["initialized"]:
-            st.session_state.pop(key, None)
-    st.session_state.auth_mode = None
-    st.rerun()
+elif st.session_state.auth_mode == "guest":
+    st.sidebar.info("👤 Guest mode (local only)")
+
 
 if st.sidebar.button("🚪 Logout"):
-    perform_logout()
+    for k in [
+        "auth_mode",
+        "google_logged_in",
+        "google_email",
+        "google_creds",
+        "_oauth_handled",
+        "initialized",
+        "history",
+        "saved_circuits",
+    ]:
+        st.session_state.pop(k, None)
+
+    st.query_params.clear()   # 🔥 REQUIRED
+    st.rerun()
 
 def reset_app():
     st.session_state.n_qubits = 1
@@ -433,37 +508,50 @@ def reset_app():
     st.session_state.manual_ops_history = [[]]
     st.session_state.manual_ops_pointer = 0
     st.session_state.uploaded_file_name = None
+    
 
 if st.sidebar.button("🆕 Create New Circuit"):
     reset_app()
 
+# -------------------------
+# Load History
+# -------------------------
 st.sidebar.markdown("### History (Click to load)")
 if st.session_state.history:
     for idx, desc in enumerate(st.session_state.history):
         if st.sidebar.button(f"🔹 {desc}", key=f"history_{idx}"):
             try:
                 stored = st.session_state.saved_circuits[idx]
+
                 loaded_ops = pickle.loads(pickle.dumps(stored.get("ops", [])))
                 loaded_qc = stored["circuit"]
+                
                 st.session_state.n_qubits = loaded_qc.num_qubits
                 st.session_state.manual_ops = loaded_ops
+                
                 st.session_state.manual_ops_history = [loaded_ops]
                 st.session_state.manual_ops_pointer = 0
+                
                 rebuild_manual_qc()
+                
                 st.session_state.mode = "manual"
                 st.session_state.uploaded_qc = None
                 st.session_state.uploaded_file_name = None
+                
                 new_qasm = safe_get_qasm(st.session_state.manual_qc)
                 st.session_state.editable_qasm = new_qasm
                 st.session_state.editable_qasm_area = new_qasm
                 st.session_state.qasm_history = [new_qasm]
                 st.session_state.qasm_redo = []
+                
                 st.rerun()
+
+        
             except Exception as e:
                 st.sidebar.error(f"❌ Failed to load circuit: {e}")
 
 # -------------------------
-# Main App Content
+# Main Title
 # -------------------------
 st.markdown("""
 <div style="
@@ -683,12 +771,17 @@ with bottom_container:
         cols = st.columns(num_cols)
 
         def has_memory_for_qubit(n):
-            needed_bytes = (2**(n-1)) * 2 * 16
+            """Check if memory is enough to compute reduced density."""
+            needed_bytes = (2**(n-1)) * 2 * 16  # complex128
             free_bytes = psutil.virtual_memory().available
             safe = needed_bytes < free_bytes * 0.4
             return safe, needed_bytes, free_bytes
 
+        # ===========================
+        # MAIN BLOCH LOOP
+        # ===========================
         for q in range(n):
+
             safe, need, free = has_memory_for_qubit(n)
             need_mb = need / (1024**2)
             free_mb = free / (1024**2)
@@ -702,9 +795,13 @@ with bottom_container:
                 break
 
             with cols[q % num_cols]:
+
                 try:
+                    # Efficient reduced density matrix for pure states
                     psi_perm = np.moveaxis(psi_tensor, q, 0).reshape(2, -1)
                     rho_mat = psi_perm @ psi_perm.conj().T
+
+                    # Bloch & Purity
                     bvec = bloch_vector_from_rho_mat(rho_mat)
                     purity = purity_from_rho_mat(rho_mat)
                     norm = np.linalg.norm(bvec)
@@ -715,12 +812,14 @@ with bottom_container:
                         f"Norm = {norm:.4f}, Purity = {purity:.4f}"
                     )
 
+                    # Bloch Sphere Plot
                     fig = plot_bloch_vector(bvec, title=f"Qubit {q}")
                     buf = io.BytesIO()
                     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
                     plt.close(fig)
                     st.image(buf.getvalue())
 
+                    # Download
                     st.download_button(
                         f"⬇ Q{q} Bloch",
                         data=buf.getvalue(),
@@ -737,6 +836,7 @@ with bottom_container:
                         f"Computed Bloch vectors up to qubit {q-1}."
                     )
                     break
+
                 except Exception as e:
                     st.warning(
                         f"⚠️ Stopped at qubit {q}: {e}\n"
