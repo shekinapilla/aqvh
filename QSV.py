@@ -85,7 +85,12 @@ if "code" in st.query_params and not st.session_state.get("google_logged_in"):
         st.rerun()
 
 # If user not authenticated yet → show login page
-if st.session_state.auth_mode == "guest" and not st.session_state.get("google_logged_in"):
+if (
+    "code" in st.query_params
+    and not st.session_state.get("google_logged_in")
+    and not st.session_state.get("logout_in_progress")
+):
+    handle_callback()
 
     # -------------------------
     # GOOGLE-LIKE LOGIN PAGE
@@ -514,22 +519,31 @@ elif st.session_state.auth_mode == "guest":
 
 if st.sidebar.button("🚪 Logout"):
 
-    # 1️⃣ Clear cookies
+    # Mark logout state
+    st.session_state.logout_in_progress = True
+
+    # Clear cookies
     cookies["auth_mode"] = ""
     cookies["email"] = ""
     cookies.save()
 
-    # 2️⃣ Reset ONLY auth-related session state
+    # Reset auth state
     st.session_state.auth_mode = "guest"
     st.session_state.google_logged_in = False
     st.session_state.google_email = None
-    st.session_state.local_email = None
     st.session_state.google_creds = None
+    st.session_state.local_email = None
 
-    # 3️⃣ Optional: reset app state (safe)
+    # Reset OAuth guard
+    if "oauth_handled" in st.session_state:
+        del st.session_state.oauth_handled
+
+    # Clear URL params
+    st.query_params.clear()
+
+    # Reset app state
     st.session_state.initialized = False
 
-    # 4️⃣ Force clean reload
     st.rerun()
 
 def reset_app():
