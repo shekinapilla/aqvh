@@ -106,12 +106,44 @@ if st.session_state.auth_mode is None:
         margin-top: 18px;
         font-size: 14px;
     }
+    .login-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+    }
+    .login-logo img {
+        width: 70px;
+        height: auto;
+    }
+    .google-login-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+    font-weight: 500;
+    color: #3c4043;
+    transition: background 0.2s ease;
+    }
+    .google-login-btn:hover {
+        background: #f7f8f8;
+    }
+    .google-login-btn img {
+        width: 18px;
+        height: 18px;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     st.markdown("""
     <div class="login-wrapper">
         <div class="login-card">
+            <div class="login-logo">
+                <img src="logo_login.png" />
+            </div>
             <div class="login-title">Welcome</div>
             <div class="login-sub">We are happy to have you back!</div>
         </div>
