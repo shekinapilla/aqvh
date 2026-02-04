@@ -1,4 +1,3 @@
-
 import streamlit as st
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, partial_trace
@@ -19,17 +18,35 @@ import base64
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-# -------------------------
-# Global Auth State
-# -------------------------
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = None   # None | "google" | "guest"
 
-if "google_logged_in" not in st.session_state:
+# -------------------------
+# Session State Initialization - FIXED
+# -------------------------
+# Initialize ALL session state variables at the BEGINNING
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
+    
+    # Authentication states
+    st.session_state.auth_mode = None   # None | "google" | "local" | "guest"
     st.session_state.google_logged_in = False
-
-if "google_email" not in st.session_state:
     st.session_state.google_email = None
+    st.session_state.local_email = None
+    st.session_state.user_email = None  # Common email for all modes
+    
+    # App states
+    st.session_state.history = []
+    st.session_state.saved_circuits = []
+    st.session_state.n_qubits = 1
+    st.session_state.manual_ops = []
+    st.session_state.manual_qc = QuantumCircuit(1)
+    st.session_state.uploaded_qc = None
+    st.session_state.mode = "manual"
+    st.session_state.editable_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];"
+    st.session_state.qasm_history = [st.session_state.editable_qasm]
+    st.session_state.qasm_redo = []
+    st.session_state.manual_ops_history = [[]]
+    st.session_state.manual_ops_pointer = 0
+    st.session_state.uploaded_file_name = None
 
 # -------------------------
 # Streamlit page config
@@ -39,27 +56,35 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+
 # -------------------------
-# LOGIN PAGE (ENTRY GATE)
+# Handle Google Callback - FIXED
 # -------------------------
-
-# Handle Google callback ONLY if redirected
-if "code" in st.query_params and not st.session_state.get("google_logged_in"):
-    handle_callback()
-
-    if st.session_state.get("google_logged_in"):
-        st.session_state.auth_mode = "google"
-        st.query_params.clear()   # ✅ clear FIRST
-        st.rerun()
-
-
-# If user not authenticated yet → show login page
-if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
-
-    # -------------------------
-    # GOOGLE-LIKE LOGIN PAGE
-    # -------------------------
+# This should run FIRST before any page rendering
+if "code" in st.query_params:
+    # Check if we already processed this code
+    current_code = st.query_params.get("code")
+    code_key = f"processed_code_{current_code}"
     
+    if not st.session_state.get(code_key, False):
+        st.session_state[code_key] = True  # Mark code as processed
+        try:
+            handle_callback()
+            
+            if st.session_state.get("google_logged_in"):
+                st.session_state.auth_mode = "google"
+                st.session_state.user_email = st.session_state.google_email
+                # Clear query params and rerun
+                st.query_params.clear()
+                st.rerun()
+        except Exception as e:
+            st.error(f"Authentication failed: {e}")
+
+# -------------------------
+# LOGIN PAGE (ENTRY GATE) - FIXED
+# -------------------------
+def show_login_page():
+    """Show login page only if user is not authenticated"""
     st.markdown("""
     <style>
     
@@ -185,6 +210,7 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
         if email and password:
             st.session_state.auth_mode = "local"
             st.session_state.local_email = email
+            st.session_state.user_email = email
             st.success("✅ Logged in")
             st.rerun()
         else:
@@ -199,24 +225,40 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
     # --- Footer ---
     st.markdown("""
     <div class="footer-text">
-        Don’t have an account? <b>Sign up</b>
+        Don't have an account? <b>Sign up</b>
     </div>
     """, unsafe_allow_html=True)
     
     st.stop()
 
+# Check if user needs to see login page
+needs_login = (
+    st.session_state.auth_mode is None and 
+    not st.session_state.google_logged_in and
+    st.session_state.local_email is None
+)
+
+if needs_login:
+    show_login_page()
 
 # -------------------------
-# History Storage (Per Mode)
+# History Storage (Per Mode) - FIXED
 # -------------------------
-if st.session_state.auth_mode == "google":
+# Determine user directory based on auth mode
+if st.session_state.auth_mode == "google" and st.session_state.google_email:
     safe_email = st.session_state.google_email.replace("@", "_").replace(".", "_")
     USER_DIR = os.path.join("user_data", safe_email)
+elif st.session_state.auth_mode == "local" and st.session_state.local_email:
+    safe_email = st.session_state.local_email.replace("@", "_").replace(".", "_")
+    USER_DIR = os.path.join("user_data", safe_email)
 else:
+    # Fallback to guest mode
     USER_DIR = os.path.join("user_data", "guest")
+    st.session_state.auth_mode = "guest"
 
 os.makedirs(USER_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
+
 def save_history_to_disk():
     try:
         with open(HISTORY_FILE, "wb") as f:
@@ -228,7 +270,7 @@ def save_history_to_disk():
                 f
             )
 
-        # 🔥 Step 3 trigger: upload per user
+        # Upload to Google Drive if using Google auth
         if (
             st.session_state.auth_mode == "google"
             and st.session_state.get("google_logged_in")
@@ -251,29 +293,12 @@ def load_history_from_disk():
             st.session_state.history = []
             st.session_state.saved_circuits = []
 
-# -------------------------
-# Initialize session states
-# -------------------------
-if "initialized" not in st.session_state:
-    st.session_state.history = []
-    st.session_state.saved_circuits = []
-    st.session_state.n_qubits = 1
-    st.session_state.manual_ops = []
-    st.session_state.manual_qc = QuantumCircuit(1)
-    st.session_state.uploaded_qc = None
-    st.session_state.mode = "manual"
-    st.session_state.editable_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];"
-    st.session_state.qasm_history = [st.session_state.editable_qasm]
-    st.session_state.qasm_redo = []
-    st.session_state.manual_ops_history = [[]]
-    st.session_state.manual_ops_pointer = 0
-    st.session_state.uploaded_file_name = None
-
+# Load history on first run
+if len(st.session_state.history) == 0:
     load_history_from_disk()
-    st.session_state.initialized = True
 
 # -------------------------
-# Helper functions
+# Helper functions (unchanged)
 # -------------------------
 def to_matrix_2x2(rho):
     """Converts a density matrix object to a 2x2 numpy array."""
@@ -451,36 +476,41 @@ def redo_qasm():
     
 
 # -------------------------
-# Sidebar
+# Sidebar - FIXED
 # -------------------------
 st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
 st.sidebar.markdown("## Account")
 
-if st.session_state.auth_mode == "google":
+# Show current user
+if st.session_state.auth_mode == "google" and st.session_state.google_email:
     st.sidebar.success(f"✅ Google: {st.session_state.google_email}")
-
+elif st.session_state.auth_mode == "local" and st.session_state.local_email:
+    st.sidebar.success(f"✅ Local: {st.session_state.local_email}")
 elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
-
-if st.sidebar.button("🚪 Logout"):
-    for k in [
-        "auth_mode",
-        "google_logged_in",
-        "google_email",
-        "google_creds",
-        "_oauth_handled",
-        "initialized",
-        "history",
-        "saved_circuits",
-    ]:
-        st.session_state.pop(k, None)
-
-    st.query_params.clear()   # 🔥 REQUIRED
+# FIXED Logout function
+def perform_logout():
+    """Properly logout and clear session state"""
+    # Clear authentication states ONLY
+    st.session_state.auth_mode = None
+    st.session_state.google_logged_in = False
+    st.session_state.google_email = None
+    st.session_state.local_email = None
+    st.session_state.user_email = None
+    
+    # Clear query parameters
+    st.query_params.clear()
+    
+    # Rerun to show login page
     st.rerun()
 
+if st.sidebar.button("🚪 Logout"):
+    perform_logout()
+
 def reset_app():
+    """Reset only app states, not authentication"""
     st.session_state.n_qubits = 1
     st.session_state.manual_ops = []
     st.session_state.manual_qc = QuantumCircuit(1)
