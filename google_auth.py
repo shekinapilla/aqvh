@@ -6,7 +6,6 @@ from googleapiclient.discovery import build
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from googleapiclient.http import MediaFileUpload
-import time
 
 SCOPES = [
     "openid",
@@ -49,25 +48,16 @@ def login_button():
     """, unsafe_allow_html=True)
 
 def handle_callback():
-    """Handle Google OAuth callback - SIMPLIFIED AND FIXED"""
-    query_params = st.query_params.to_dict()
-    
-    # Exit if no code
-    if "code" not in query_params:
-        return
-
-    # Get the authorization code
-    incoming_code = query_params["code"]
-    
-    # Check if we already processed this code
-    code_key = f"processed_code_{incoming_code}"
-    if st.session_state.get(code_key):
-        return  # Already processed
-    
-    # Mark as processed
-    st.session_state[code_key] = True
-    
+    """Handle Google OAuth callback - WORKING VERSION"""
     try:
+        # Get the pending auth code from session
+        auth_code = st.session_state.get("pending_auth_code")
+        if not auth_code:
+            return False
+        
+        # Clear it immediately
+        st.session_state.pending_auth_code = None
+        
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -83,11 +73,11 @@ def handle_callback():
         
         flow.redirect_uri = os.environ["REDIRECT_URI"]
         
-        # Get state from session or query params
-        state = query_params.get("state") or st.session_state.get("oauth_state")
+        # Get state from session
+        state = st.session_state.get("oauth_state")
         
-        # Fetch token
-        flow.fetch_token(code=incoming_code, state=state)
+        # Fetch token with code
+        flow.fetch_token(code=auth_code, state=state)
         
         creds = flow.credentials
         
@@ -103,19 +93,21 @@ def handle_callback():
         st.session_state["google_creds"] = creds
         st.session_state["google_logged_in"] = True
         
-        # Success
+        # Clear OAuth state
+        if "oauth_state" in st.session_state:
+            st.session_state.pop("oauth_state")
+        
         return True
         
     except Exception as e:
         st.error(f"Google authentication error: {str(e)}")
-        # Remove the processed flag so user can try again
-        st.session_state.pop(code_key, None)
+        # Clear any pending auth code
+        st.session_state.pending_auth_code = None
         return False
 
 def get_drive_service():
     creds = st.session_state["google_creds"]
     return build("drive", "v3", credentials=creds)
-
 
 def get_or_create_folder(service, name, parent_id=None):
     q = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
