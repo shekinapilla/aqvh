@@ -44,23 +44,17 @@ st.set_page_config(
 # -------------------------
 
 # Handle Google callback ONLY if redirected
-if "code" in st.query_params:
+if "code" in st.query_params and not st.session_state.get("google_logged_in"):
     handle_callback()
 
     if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
-
-        # These must already be set inside handle_callback()
-        # Keeping here for clarity
-        # st.session_state["google_email"] = idinfo["email"]
-        # st.session_state["google_creds"] = creds
-        # st.session_state["google_logged_in"] = True
-
         st.query_params.clear()
+        st.rerun()   # 🔥 CRITICAL LINE
 
 
 # If user not authenticated yet → show login page
-if st.session_state.auth_mode is None:
+if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
 
     # -------------------------
     # GOOGLE-LIKE LOGIN PAGE
