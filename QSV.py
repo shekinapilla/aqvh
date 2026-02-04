@@ -62,76 +62,96 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
     
     st.markdown("""
     <style>
+    
+    /* Full page background */
+    body {
+        background-color: #0e0e0e;
+        color: #eaeaea;
+    }
+    
+    /* Center wrapper */
     .login-wrapper {
         display: flex;
         justify-content: center;
         margin-top: 90px;
-    body {
-    background-color: #f5f6fa;
     }
+    
+    /* Login card */
     .login-card {
         width: 420px;
         padding: 32px;
         border-radius: 14px;
-        background: white;
-        box-shadow: 0px 10px 30px rgba(0,0,0,0.15);
+        background: #1a1a1a;
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.6);
     }
+    
+    /* Title & subtitle */
     .login-title {
         font-size: 26px;
         font-weight: 600;
         text-align: center;
+        color: #ffffff;
     }
+    
     .login-sub {
         text-align: center;
-        color: #777;
+        color: #bbbbbb;
         margin-bottom: 24px;
     }
+    
+    /* Divider */
     .divider {
         text-align: center;
         margin: 20px 0;
-        color: #999;
+        color: #888;
     }
-    .google-btn {
-        border: 1px solid #ddd;
-        padding: 10px;
-        border-radius: 8px;
-        text-align: center;
-        cursor: pointer;
-    }
+    
+    /* Footer text */
     .footer-text {
         text-align: center;
         margin-top: 18px;
         font-size: 14px;
+        color: #aaa;
     }
+    
+    /* Logo */
     .login-logo {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 10px;
+        display: flex;
+        justify-content: center;
+        margin-bottom: 10px;
     }
-    .login-logo img {
-        width: 70px;
-        height: auto;
-    }
+    
+    /* Google button container */
     .google-login-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    border: 1px solid #dadce0;
-    border-radius: 8px;
-    padding: 10px;
-    background: white;
-    font-weight: 500;
-    color: #3c4043;
-    transition: background 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px;
+        background: #111;
+        font-weight: 500;
+        color: #eaeaea;
+        transition: background 0.2s ease;
     }
+    
     .google-login-btn:hover {
-        background: #f7f8f8;
+        background: #222;
     }
+    
     .google-login-btn img {
         width: 18px;
         height: 18px;
     }
+    
+    /* Inputs */
+    input {
+        background-color: #111 !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
     
