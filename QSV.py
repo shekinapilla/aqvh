@@ -10,11 +10,10 @@ import pickle
 import psutil
 import gc
 import warnings
-from google_auth import login_button, handle_callback, restore_login_from_storage
+from google_auth import login_button, handle_callback, check_persistent_login
 from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 import base64
-import time
 
 def img_to_base64(path):
     with open(path, "rb") as f:
@@ -23,7 +22,7 @@ def img_to_base64(path):
 # -------------------------
 # Initialize Auth State
 # -------------------------
-# Critical: Initialize all session state variables at the beginning
+# Initialize session state variables if they don't exist
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = None
 
@@ -43,10 +42,10 @@ st.set_page_config(
 )
 
 # -------------------------
-# RESTORE LOGIN STATE (BEFORE ANYTHING ELSE)
+# CHECK FOR PERSISTENT LOGIN
 # -------------------------
-# Try to restore login from localStorage
-restore_login_from_storage()
+# This checks query params for login info
+check_persistent_login()
 
 # -------------------------
 # Handle Google OAuth Callback
@@ -56,10 +55,8 @@ if "code" in st.query_params:
     if not st.session_state.get("google_logged_in"):
         handle_callback()
         
-        # If login was successful, force a rerun
+        # If login was successful, rerun
         if st.session_state.get("google_logged_in"):
-            # Wait a bit for session state to update
-            time.sleep(0.5)
             st.rerun()
     else:
         # Already logged in, clear the code
@@ -68,7 +65,6 @@ if "code" in st.query_params:
 # -------------------------
 # CHECK AUTHENTICATION STATUS
 # -------------------------
-# Define a function to check if user is authenticated
 def is_authenticated():
     # Check Google login
     if st.session_state.get("google_logged_in"):
@@ -78,11 +74,42 @@ def is_authenticated():
     if st.session_state.get("auth_mode") == "local":
         return True
         
-    # Check if we have auth_mode set from localStorage
-    if st.session_state.get("auth_mode") in ["google", "local"]:
-        return True
-        
     return False
+
+# -------------------------
+# SESSION PERSISTENCE SCRIPT
+# -------------------------
+# Add JavaScript to maintain session state
+st.markdown("""
+<script>
+// Function to check and restore session state
+function checkSessionState() {
+    // Check if we have login state in localStorage
+    const savedAuthMode = localStorage.getItem('auth_mode');
+    const savedEmail = localStorage.getItem('email');
+    
+    if (savedAuthMode && savedEmail && !window.location.search.includes('logged_in')) {
+        // We have saved login but not in URL, set it in URL
+        const url = new URL(window.location);
+        url.searchParams.set('logged_in', 'true');
+        url.searchParams.set('auth_mode', savedAuthMode);
+        url.searchParams.set('email', savedEmail);
+        window.history.replaceState({}, '', url);
+        window.location.reload();
+    }
+}
+
+// Run on page load
+window.addEventListener('load', checkSessionState);
+
+// Also run when page becomes visible again (like after refresh)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        setTimeout(checkSessionState, 100);
+    }
+});
+</script>
+""", unsafe_allow_html=True)
 
 # -------------------------
 # LOGIN PAGE (ONLY IF NOT AUTHENTICATED)
@@ -217,13 +244,22 @@ if not is_authenticated():
         if email and password:
             st.session_state.auth_mode = "local"
             st.session_state.local_email = email
-            # Save to localStorage for persistence
+            
+            # Save to localStorage
             st.markdown(f"""
             <script>
-            localStorage.setItem('local_email', '{email}');
             localStorage.setItem('auth_mode', 'local');
+            localStorage.setItem('email', '{email}');
+            
+            // Set query params for persistence
+            const url = new URL(window.location);
+            url.searchParams.set('logged_in', 'true');
+            url.searchParams.set('auth_mode', 'local');
+            url.searchParams.set('email', '{email}');
+            window.history.replaceState({{}}, '', url);
             </script>
             """, unsafe_allow_html=True)
+            
             st.success("✅ Logged in")
             st.rerun()
         else:
@@ -247,15 +283,21 @@ if not is_authenticated():
 # -------------------------
 # MAIN APP (USER IS AUTHENTICATED)
 # -------------------------
-# Restore local login from localStorage if needed
-if st.session_state.get("auth_mode") == "local" and "local_email" not in st.session_state:
-    st.markdown("""
+# Save login state to localStorage for persistence
+if st.session_state.get("auth_mode") == "google":
+    email = st.session_state.get("google_email", "")
+    st.markdown(f"""
     <script>
-    const localEmail = localStorage.getItem('local_email');
-    if (localEmail) {
-        window.streamlitSessionState = window.streamlitSessionState || {};
-        window.streamlitSessionState.local_email = localEmail;
-    }
+    localStorage.setItem('auth_mode', 'google');
+    localStorage.setItem('email', '{email}');
+    </script>
+    """, unsafe_allow_html=True)
+elif st.session_state.get("auth_mode") == "local":
+    email = st.session_state.get("local_email", "")
+    st.markdown(f"""
+    <script>
+    localStorage.setItem('auth_mode', 'local');
+    localStorage.setItem('email', '{email}');
     </script>
     """, unsafe_allow_html=True)
 
@@ -327,7 +369,7 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
 # -------------------------
-# Helper functions (REMAIN THE SAME)
+# Helper functions (REMAIN THE SAME - no changes needed)
 # -------------------------
 def to_matrix_2x2(rho):
     """Converts a density matrix object to a 2x2 numpy array."""
@@ -520,18 +562,23 @@ if st.sidebar.button("🚪 Logout", key="logout_button"):
     # Clear localStorage via JavaScript
     st.markdown("""
     <script>
+    localStorage.removeItem('auth_mode');
+    localStorage.removeItem('email');
     localStorage.removeItem('google_email');
     localStorage.removeItem('local_email');
-    localStorage.removeItem('auth_mode');
+    
+    // Clear query parameters
+    const url = new URL(window.location);
+    url.searchParams.delete('logged_in');
+    url.searchParams.delete('auth_mode');
+    url.searchParams.delete('email');
+    window.history.replaceState({}, '', url);
     </script>
     """, unsafe_allow_html=True)
     
     # Clear all session state
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    
-    # Clear query parameters
-    st.query_params.clear()
     
     # Force complete rerun
     st.rerun()
