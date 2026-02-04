@@ -464,26 +464,26 @@ elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
 
-from google.auth.transport.requests import Request
-
 if st.sidebar.button("🚪 Logout"):
-    # revoke Google token if present
-    creds = st.session_state.get("google_creds")
-    if creds:
-        try:
-            creds.revoke(Request())
-        except Exception:
-            pass
-
-    # clear all Google auth state
-    for k in [
+    # Clear ALL relevant session state variables
+    keys_to_clear = [
         "auth_mode", "google_logged_in", "google_email", "google_creds",
-        "initialized", "history", "saved_circuits"
-    ]:
-        st.session_state.pop(k, None)
+        "initialized", "history", "saved_circuits", "oauth_code_processed",
+        "oauth_state", "local_email"
+    ]
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
     
+    # Also clear file uploader state if exists
+    if "file_uploader" in st.session_state:
+        del st.session_state["file_uploader"]
+    
+    # 🔥 Clear query parameters too
+    st.query_params.clear()
+    
+    # Force a complete rerun
     st.rerun()
-
 def reset_app():
     st.session_state.n_qubits = 1
     st.session_state.manual_ops = []
