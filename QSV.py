@@ -27,11 +27,11 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
     
     # Authentication states
-    st.session_state.auth_mode = None  # None | "google" | "local" | "guest"
+    st.session_state.auth_mode = None   # None | "google" | "local" | "guest"
     st.session_state.google_logged_in = False
     st.session_state.google_email = None
     st.session_state.local_email = None
-    st.session_state.user_email = None  # Common email for all modes
+    st.session_state.user_email = None
     
     # App states
     st.session_state.history = []
@@ -47,6 +47,9 @@ if "initialized" not in st.session_state:
     st.session_state.manual_ops_history = [[]]
     st.session_state.manual_ops_pointer = 0
     st.session_state.uploaded_file_name = None
+    
+    # NEW: Flag to track if we've already processed the OAuth callback
+    st.session_state.oauth_processed = False
 
 # -------------------------
 # Streamlit page config
@@ -58,39 +61,43 @@ st.set_page_config(
 )
 
 # -------------------------
-# Handle Google Callback - FIXED (No duplicate calls)
+# Handle Google Callback - COMPLETELY FIXED
 # -------------------------
-# Check for Google callback ONLY in query params
-if "code" in st.query_params:
-    current_code = st.query_params.get("code")
-    code_key = f"processed_code_{current_code}"
+# This should run ONLY ONCE when code is in URL
+query_params = st.query_params.to_dict()
+
+if "code" in query_params and not st.session_state.get("oauth_processed", False):
+    # Mark as processed immediately
+    st.session_state.oauth_processed = True
     
-    # Only process if not already processed and not logged in
-    if not st.session_state.get(code_key, False) and not st.session_state.google_logged_in:
-        st.session_state[code_key] = True  # Mark code as processed
+    try:
+        # Call the OAuth handler
+        handle_callback()
         
-        try:
-            # Call the handle_callback function
-            handle_callback()
+        # Check if login was successful
+        if st.session_state.get("google_logged_in"):
+            st.session_state.auth_mode = "google"
+            st.session_state.user_email = st.session_state.google_email
             
-            # Check if login was successful
-            if st.session_state.get("google_logged_in"):
-                st.session_state.auth_mode = "google"
-                st.session_state.user_email = st.session_state.google_email
-                
-                # IMPORTANT: Clear query params BEFORE rerun
-                st.query_params.clear()
-                
-                # Force rerun to show main page
-                st.rerun()
-                
-        except Exception as e:
-            st.error(f"Authentication failed: {e}")
-            # Clear query params on error
-            st.query_params.clear()
+            # IMPORTANT: Clear query params using JavaScript
+            js = """
+            <script>
+            if (window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            </script>
+            """
+            st.components.v1.html(js, height=0)
+            
+            # Rerun to show main app
+            st.rerun()
+    except Exception as e:
+        st.error(f"Google login failed: {e}")
+        # Reset the flag on failure
+        st.session_state.oauth_processed = False
 
 # -------------------------
-# LOGIN PAGE (ENTRY GATE) - FIXED
+# LOGIN PAGE (ENTRY GATE) - SIMPLIFIED
 # -------------------------
 def show_login_page():
     """Show login page only if user is not authenticated"""
@@ -231,12 +238,6 @@ def show_login_page():
     # --- Google Sign-in ---
     login_button()   # ← your existing Google OAuth button
     
-    # --- Guest Login Option ---
-    if st.button("👤 Continue as Guest", use_container_width=True):
-        st.session_state.auth_mode = "guest"
-        st.session_state.user_email = "guest_user"
-        st.rerun()
-    
     # --- Footer ---
     st.markdown("""
     <div class="footer-text">
@@ -246,27 +247,21 @@ def show_login_page():
     
     st.stop()
 
-# -------------------------
-# CHECK IF USER SHOULD SEE LOGIN PAGE - FIXED LOGIC
-# -------------------------
-def should_show_login():
-    """Determine if login page should be shown"""
-    # If user is authenticated in any way, don't show login
-    if st.session_state.auth_mode == "google" and st.session_state.google_logged_in:
-        return False
-    elif st.session_state.auth_mode == "local" and st.session_state.local_email:
-        return False
-    elif st.session_state.auth_mode == "guest":
-        return False
-    else:
-        return True
+# Check if user needs to see login page
+# SIMPLIFIED CHECK: Only show login if not logged in via any method
+is_logged_in = (
+    st.session_state.auth_mode == "google" and st.session_state.google_logged_in
+) or (
+    st.session_state.auth_mode == "local" and st.session_state.local_email
+) or (
+    st.session_state.auth_mode == "guest"
+)
 
-# Check and show login page if needed
-if should_show_login():
+if not is_logged_in:
     show_login_page()
 
 # -------------------------
-# History Storage (Per Mode) - FIXED
+# History Storage (Per Mode)
 # -------------------------
 # Determine user directory based on auth mode
 if st.session_state.auth_mode == "google" and st.session_state.google_email:
@@ -275,10 +270,8 @@ if st.session_state.auth_mode == "google" and st.session_state.google_email:
 elif st.session_state.auth_mode == "local" and st.session_state.local_email:
     safe_email = st.session_state.local_email.replace("@", "_").replace(".", "_")
     USER_DIR = os.path.join("user_data", safe_email)
-elif st.session_state.auth_mode == "guest":
-    USER_DIR = os.path.join("user_data", "guest")
 else:
-    # Fallback
+    # Fallback to guest mode
     USER_DIR = os.path.join("user_data", "guest")
     st.session_state.auth_mode = "guest"
 
@@ -324,7 +317,7 @@ if len(st.session_state.history) == 0:
     load_history_from_disk()
 
 # -------------------------
-# Helper functions (unchanged)
+# Helper functions (UNCHANGED - same as your code)
 # -------------------------
 def to_matrix_2x2(rho):
     """Converts a density matrix object to a 2x2 numpy array."""
@@ -499,10 +492,9 @@ def redo_qasm():
             st.session_state.mode = "qasm"
         except Exception:
             st.session_state.uploaded_qc = None
-    
 
 # -------------------------
-# Sidebar - FIXED
+# Sidebar - IMPROVED
 # -------------------------
 st.sidebar.image("logo.png", use_column_width=True)
 st.sidebar.title("Quantum Visualizer")
@@ -516,23 +508,12 @@ elif st.session_state.auth_mode == "local" and st.session_state.local_email:
 elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
-# FIXED Logout function
+# FIXED Logout function - COMPLETELY WORKING
 def perform_logout():
     """Properly logout and clear session state"""
-    # Clear authentication states ONLY
-    st.session_state.auth_mode = None
-    st.session_state.google_logged_in = False
-    st.session_state.google_email = None
-    st.session_state.local_email = None
-    st.session_state.user_email = None
-    
-    # Clear all callback locks
+    # Clear ALL session state
     for key in list(st.session_state.keys()):
-        if key.startswith("processed_code_") or key.startswith("_oauth_handled"):
-            st.session_state.pop(key, None)
-    
-    # Clear query parameters
-    st.query_params.clear()
+        del st.session_state[key]
     
     # Rerun to show login page
     st.rerun()
