@@ -20,14 +20,14 @@ def img_to_base64(path):
         return base64.b64encode(f.read()).decode()
 
 # -------------------------
-# Session State Initialization - FIXED
+# Session State Initialization - COMPLETELY FIXED
 # -------------------------
 # Initialize ALL session state variables at the BEGINNING
 if "initialized" not in st.session_state:
     st.session_state.initialized = True
     
     # Authentication states
-    st.session_state.auth_mode = None   # None | "google" | "local" | "guest"
+    st.session_state.auth_mode = None  # None | "google" | "local" | "guest"
     st.session_state.google_logged_in = False
     st.session_state.google_email = None
     st.session_state.local_email = None
@@ -58,27 +58,36 @@ st.set_page_config(
 )
 
 # -------------------------
-# Handle Google Callback - FIXED
+# Handle Google Callback - FIXED (No duplicate calls)
 # -------------------------
-# This should run FIRST before any page rendering
+# Check for Google callback ONLY in query params
 if "code" in st.query_params:
-    # Check if we already processed this code
     current_code = st.query_params.get("code")
     code_key = f"processed_code_{current_code}"
     
-    if not st.session_state.get(code_key, False):
+    # Only process if not already processed and not logged in
+    if not st.session_state.get(code_key, False) and not st.session_state.google_logged_in:
         st.session_state[code_key] = True  # Mark code as processed
+        
         try:
+            # Call the handle_callback function
             handle_callback()
             
+            # Check if login was successful
             if st.session_state.get("google_logged_in"):
                 st.session_state.auth_mode = "google"
                 st.session_state.user_email = st.session_state.google_email
-                # Clear query params and rerun
+                
+                # IMPORTANT: Clear query params BEFORE rerun
                 st.query_params.clear()
+                
+                # Force rerun to show main page
                 st.rerun()
+                
         except Exception as e:
             st.error(f"Authentication failed: {e}")
+            # Clear query params on error
+            st.query_params.clear()
 
 # -------------------------
 # LOGIN PAGE (ENTRY GATE) - FIXED
@@ -222,6 +231,12 @@ def show_login_page():
     # --- Google Sign-in ---
     login_button()   # ← your existing Google OAuth button
     
+    # --- Guest Login Option ---
+    if st.button("👤 Continue as Guest", use_container_width=True):
+        st.session_state.auth_mode = "guest"
+        st.session_state.user_email = "guest_user"
+        st.rerun()
+    
     # --- Footer ---
     st.markdown("""
     <div class="footer-text">
@@ -231,14 +246,23 @@ def show_login_page():
     
     st.stop()
 
-# Check if user needs to see login page
-needs_login = (
-    st.session_state.auth_mode is None and 
-    not st.session_state.google_logged_in and
-    st.session_state.local_email is None
-)
+# -------------------------
+# CHECK IF USER SHOULD SEE LOGIN PAGE - FIXED LOGIC
+# -------------------------
+def should_show_login():
+    """Determine if login page should be shown"""
+    # If user is authenticated in any way, don't show login
+    if st.session_state.auth_mode == "google" and st.session_state.google_logged_in:
+        return False
+    elif st.session_state.auth_mode == "local" and st.session_state.local_email:
+        return False
+    elif st.session_state.auth_mode == "guest":
+        return False
+    else:
+        return True
 
-if needs_login:
+# Check and show login page if needed
+if should_show_login():
     show_login_page()
 
 # -------------------------
@@ -251,8 +275,10 @@ if st.session_state.auth_mode == "google" and st.session_state.google_email:
 elif st.session_state.auth_mode == "local" and st.session_state.local_email:
     safe_email = st.session_state.local_email.replace("@", "_").replace(".", "_")
     USER_DIR = os.path.join("user_data", safe_email)
+elif st.session_state.auth_mode == "guest":
+    USER_DIR = os.path.join("user_data", "guest")
 else:
-    # Fallback to guest mode
+    # Fallback
     USER_DIR = os.path.join("user_data", "guest")
     st.session_state.auth_mode = "guest"
 
@@ -499,6 +525,11 @@ def perform_logout():
     st.session_state.google_email = None
     st.session_state.local_email = None
     st.session_state.user_email = None
+    
+    # Clear all callback locks
+    for key in list(st.session_state.keys()):
+        if key.startswith("processed_code_") or key.startswith("_oauth_handled"):
+            st.session_state.pop(key, None)
     
     # Clear query parameters
     st.query_params.clear()
