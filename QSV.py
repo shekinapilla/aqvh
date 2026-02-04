@@ -1,4 +1,4 @@
-
+from streamlit_cookies_manager import EncryptedCookieManager
 import streamlit as st
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, partial_trace
@@ -13,9 +13,16 @@ import gc
 import warnings
 from google_auth import login_button, handle_callback
 from google_auth import upload_history_to_drive
+
 warnings.filterwarnings("ignore")
 import base64
+cookies = EncryptedCookieManager(
+    prefix="qsv_app",
+    password=os.environ.get("COOKIE_SECRET", "dev-secret")
+)
 
+if not cookies.ready():
+    st.stop()
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
@@ -23,7 +30,10 @@ def img_to_base64(path):
 # Global Auth State
 # -------------------------
 if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = None   # None | "google" | "guest"
+    st.session_state.auth_mode = None
+
+if st.session_state.auth_mode is None:
+    st.session_state.auth_mode = "guest"
 
 if "google_logged_in" not in st.session_state:
     st.session_state.google_logged_in = False
@@ -39,6 +49,21 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
+
+
+# 🔐 Auto-login from cookie
+if st.session_state.auth_mode in (None, "guest"):
+    mode = cookies.get("auth_mode")
+    email = cookies.get("email")
+
+    if mode == "google" and email:
+        st.session_state.auth_mode = "google"
+        st.session_state.google_email = email
+        st.session_state.google_logged_in = True
+
+    elif mode == "local" and email:
+        st.session_state.auth_mode = "local"
+        st.session_state.local_email = email
 # -------------------------
 # LOGIN PAGE (ENTRY GATE)
 # -------------------------
@@ -49,12 +74,16 @@ if "code" in st.query_params and not st.session_state.get("google_logged_in"):
 
     if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
-        st.query_params.clear()
-        st.rerun()   # 🔥 CRITICAL LINE
 
+        cookies["auth_mode"] = "google"
+        cookies["email"] = st.session_state.google_email
+        cookies.save()
+
+        st.query_params.clear()
+        st.rerun()
 
 # If user not authenticated yet → show login page
-if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
+if st.session_state.auth_mode == "guest" and not st.session_state.get("google_logged_in"):
 
     # -------------------------
     # GOOGLE-LIKE LOGIN PAGE
@@ -185,6 +214,10 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
         if email and password:
             st.session_state.auth_mode = "local"
             st.session_state.local_email = email
+            
+            cookies["auth_mode"] = "local"
+            cookies["email"] = email
+            cookies.save()
             st.success("✅ Logged in")
             st.rerun()
         else:
@@ -463,14 +496,13 @@ if st.session_state.auth_mode == "google":
 elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
-
 if st.sidebar.button("🚪 Logout"):
-    for k in [
-        "auth_mode", "google_logged_in", "google_email", "google_creds",
-        "initialized", "history", "saved_circuits"
-    ]:
-        st.session_state.pop(k, None)
-    
+    cookies.clear()
+    cookies.save()
+
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+
     st.rerun()
 
 def reset_app():
