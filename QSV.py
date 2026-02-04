@@ -1,5 +1,6 @@
-from streamlit_cookies_manager import EncryptedCookieManager
 import streamlit as st
+from streamlit_cookies_manager import EncryptedCookieManager
+
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, partial_trace
 from qiskit.qasm2 import dumps as dumps2
@@ -64,6 +65,7 @@ if st.session_state.auth_mode in (None, "guest"):
     elif mode == "local" and email:
         st.session_state.auth_mode = "local"
         st.session_state.local_email = email
+
 # -------------------------
 # LOGIN PAGE (ENTRY GATE)
 # -------------------------
@@ -284,6 +286,20 @@ def load_history_from_disk():
             st.session_state.history = []
             st.session_state.saved_circuits = []
 
+if "last_user" not in st.session_state:
+    st.session_state.last_user = None
+
+current_user = (
+    st.session_state.google_email
+    if st.session_state.auth_mode == "google"
+    else "guest"
+)
+
+if st.session_state.last_user != current_user:
+    st.session_state.history = []
+    st.session_state.saved_circuits = []
+    load_history_from_disk()
+    st.session_state.last_user = current_user
 # -------------------------
 # Initialize session states
 # -------------------------
