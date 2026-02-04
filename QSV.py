@@ -1,4 +1,3 @@
-
 import streamlit as st
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, partial_trace
@@ -11,20 +10,22 @@ import pickle
 import psutil
 import gc
 import warnings
-from google_auth import login_button, handle_callback
+from google_auth import login_button, handle_callback, restore_login_from_storage
 from google_auth import upload_history_to_drive
 warnings.filterwarnings("ignore")
 import base64
+import time
 
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 # -------------------------
-# Persist login across reruns
+# Initialize Auth State
 # -------------------------
+# Critical: Initialize all session state variables at the beginning
 if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = None  # None | "google" | "guest"
+    st.session_state.auth_mode = None
 
 if "google_logged_in" not in st.session_state:
     st.session_state.google_logged_in = False
@@ -32,10 +33,6 @@ if "google_logged_in" not in st.session_state:
 if "google_email" not in st.session_state:
     st.session_state.google_email = None
 
-# 🔹 NEW: restore auth_mode if Google creds exist
-if st.session_state.get("google_creds") and not st.session_state.get("google_logged_in"):
-    st.session_state.google_logged_in = True
-    st.session_state.auth_mode = "google"
 # -------------------------
 # Streamlit page config
 # -------------------------
@@ -44,23 +41,53 @@ st.set_page_config(
     page_icon="logo.ico",
     layout="wide"
 )
-# -------------------------
-# LOGIN PAGE (ENTRY GATE)
-# -------------------------
 
-# Handle Google callback ONLY if redirected
-if "code" in st.query_params and not st.session_state.get("google_logged_in"):
-    handle_callback()
+# -------------------------
+# RESTORE LOGIN STATE (BEFORE ANYTHING ELSE)
+# -------------------------
+# Try to restore login from localStorage
+restore_login_from_storage()
 
-    if st.session_state.get("google_logged_in"):
-        st.session_state.auth_mode = "google"
+# -------------------------
+# Handle Google OAuth Callback
+# -------------------------
+if "code" in st.query_params:
+    # Only process callback if we're not already logged in
+    if not st.session_state.get("google_logged_in"):
+        handle_callback()
+        
+        # If login was successful, force a rerun
+        if st.session_state.get("google_logged_in"):
+            # Wait a bit for session state to update
+            time.sleep(0.5)
+            st.rerun()
+    else:
+        # Already logged in, clear the code
         st.query_params.clear()
-        st.rerun()   # 🔥 CRITICAL LINE
 
+# -------------------------
+# CHECK AUTHENTICATION STATUS
+# -------------------------
+# Define a function to check if user is authenticated
+def is_authenticated():
+    # Check Google login
+    if st.session_state.get("google_logged_in"):
+        return True
+    
+    # Check local login
+    if st.session_state.get("auth_mode") == "local":
+        return True
+        
+    # Check if we have auth_mode set from localStorage
+    if st.session_state.get("auth_mode") in ["google", "local"]:
+        return True
+        
+    return False
 
-# If user not authenticated yet → show login page
-if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
-
+# -------------------------
+# LOGIN PAGE (ONLY IF NOT AUTHENTICATED)
+# -------------------------
+if not is_authenticated():
     # -------------------------
     # GOOGLE-LIKE LOGIN PAGE
     # -------------------------
@@ -190,6 +217,13 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
         if email and password:
             st.session_state.auth_mode = "local"
             st.session_state.local_email = email
+            # Save to localStorage for persistence
+            st.markdown(f"""
+            <script>
+            localStorage.setItem('local_email', '{email}');
+            localStorage.setItem('auth_mode', 'local');
+            </script>
+            """, unsafe_allow_html=True)
             st.success("✅ Logged in")
             st.rerun()
         else:
@@ -199,17 +233,31 @@ if st.session_state.auth_mode is None and not st.session_state.get("google_logge
     st.markdown("<div class='divider'>— Or —</div>", unsafe_allow_html=True)
     
     # --- Google Sign-in ---
-    login_button()   # ← your existing Google OAuth button
+    login_button()
     
     # --- Footer ---
     st.markdown("""
     <div class="footer-text">
-        Don’t have an account? <b>Sign up</b>
+        Don't have an account? <b>Sign up</b>
     </div>
     """, unsafe_allow_html=True)
     
     st.stop()
 
+# -------------------------
+# MAIN APP (USER IS AUTHENTICATED)
+# -------------------------
+# Restore local login from localStorage if needed
+if st.session_state.get("auth_mode") == "local" and "local_email" not in st.session_state:
+    st.markdown("""
+    <script>
+    const localEmail = localStorage.getItem('local_email');
+    if (localEmail) {
+        window.streamlitSessionState = window.streamlitSessionState || {};
+        window.streamlitSessionState.local_email = localEmail;
+    }
+    </script>
+    """, unsafe_allow_html=True)
 
 # -------------------------
 # History Storage (Per Mode)
@@ -222,6 +270,7 @@ else:
 
 os.makedirs(USER_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(USER_DIR, "history.pkl")
+
 def save_history_to_disk():
     try:
         with open(HISTORY_FILE, "wb") as f:
@@ -233,7 +282,7 @@ def save_history_to_disk():
                 f
             )
 
-        # 🔥 Step 3 trigger: upload per user
+        # Upload to Google Drive if Google user
         if (
             st.session_state.auth_mode == "google"
             and st.session_state.get("google_logged_in")
@@ -278,7 +327,7 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
 # -------------------------
-# Helper functions
+# Helper functions (REMAIN THE SAME)
 # -------------------------
 def to_matrix_2x2(rho):
     """Converts a density matrix object to a 2x2 numpy array."""
@@ -428,7 +477,6 @@ def handle_file_upload_callback():
             st.session_state.uploaded_qc = None
             st.session_state.mode = "manual"
             st.session_state.uploaded_file_name = None
-            
 
 def undo_qasm():
     """Undoes the last QASM change by reverting to the previous state in history."""
@@ -440,7 +488,6 @@ def undo_qasm():
             st.session_state.mode = "qasm"
         except Exception:
             st.session_state.uploaded_qc = None
-    
 
 def redo_qasm():
     """Redoes the last QASM undo by moving a state from redo stack to history."""
@@ -453,7 +500,6 @@ def redo_qasm():
             st.session_state.mode = "qasm"
         except Exception:
             st.session_state.uploaded_qc = None
-    
 
 # -------------------------
 # Sidebar
@@ -464,31 +510,32 @@ st.sidebar.markdown("## Account")
 
 if st.session_state.auth_mode == "google":
     st.sidebar.success(f"✅ Google: {st.session_state.google_email}")
+elif st.session_state.auth_mode == "local":
+    st.sidebar.info(f"👤 Local: {st.session_state.local_email}")
 
-elif st.session_state.auth_mode == "guest":
-    st.sidebar.info("👤 Guest mode (local only)")
-
-
-if st.sidebar.button("🚪 Logout"):
-    # Clear ALL relevant session state variables
-    keys_to_clear = [
-        "auth_mode", "google_logged_in", "google_email", "google_creds",
-        "initialized", "history", "saved_circuits", "oauth_code_processed",
-        "oauth_state", "local_email"
-    ]
-    for k in keys_to_clear:
-        if k in st.session_state:
-            del st.session_state[k]
+# -------------------------
+# Enhanced Logout Function
+# -------------------------
+if st.sidebar.button("🚪 Logout", key="logout_button"):
+    # Clear localStorage via JavaScript
+    st.markdown("""
+    <script>
+    localStorage.removeItem('google_email');
+    localStorage.removeItem('local_email');
+    localStorage.removeItem('auth_mode');
+    </script>
+    """, unsafe_allow_html=True)
     
-    # Also clear file uploader state if exists
-    if "file_uploader" in st.session_state:
-        del st.session_state["file_uploader"]
+    # Clear all session state
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     
-    # 🔥 Clear query parameters too
+    # Clear query parameters
     st.query_params.clear()
     
-    # Force a complete rerun
+    # Force complete rerun
     st.rerun()
+
 def reset_app():
     st.session_state.n_qubits = 1
     st.session_state.manual_ops = []
@@ -501,7 +548,6 @@ def reset_app():
     st.session_state.manual_ops_history = [[]]
     st.session_state.manual_ops_pointer = 0
     st.session_state.uploaded_file_name = None
-    
 
 if st.sidebar.button("🆕 Create New Circuit"):
     reset_app()
@@ -539,7 +585,6 @@ if st.session_state.history:
                 
                 st.rerun()
 
-        
             except Exception as e:
                 st.sidebar.error(f"❌ Failed to load circuit: {e}")
 
@@ -581,7 +626,6 @@ with top_container:
             st.session_state.manual_ops_history = [[]]
             st.session_state.manual_ops_pointer = 0
             rebuild_manual_qc()
-            
 
         n_qubits = st.session_state.n_qubits
 
@@ -612,7 +656,6 @@ with top_container:
                 st.session_state.manual_ops_pointer = 0
                 rebuild_manual_qc()
                 st.success("✅ Gates cleared.")
-                
 
         col_manual_undo, col_manual_redo = st.columns(2)
         with col_manual_undo:
@@ -630,7 +673,6 @@ with top_container:
                     pickle.dumps(st.session_state.manual_ops_history[st.session_state.manual_ops_pointer])
                 )
                 rebuild_manual_qc()
-                
 
         st.markdown("---")
         circuit_name = st.text_input("Name your circuit", placeholder="e.g. Bell State", key="circuit_name_input")
@@ -733,7 +775,6 @@ with bottom_container:
         # BLOCH SPHERE VISUALIZATION
         # ===========================
         st.write("### Per-Qubit Bloch Vectors & Purity")
-
 
         # Remove classical ops
         quantum_only_qc = remove_classical_instructions(qc_to_display)
