@@ -30,13 +30,7 @@ if "google_logged_in" not in st.session_state:
 
 if "google_email" not in st.session_state:
     st.session_state.google_email = None
-# -------------------------
-# 🔒 HARD BLOCK: Prevent OAuth re-run on refresh
-# -------------------------
-if st.session_state.get("google_logged_in"):
-    if "code" in st.query_params:
-        st.query_params.clear()
-        st.stop()
+
 # -------------------------
 # Streamlit page config
 # -------------------------
@@ -48,26 +42,16 @@ st.set_page_config(
 # -------------------------
 # LOGIN PAGE (ENTRY GATE)
 # -------------------------
-# -------------------------
-# ✅ Handle Google OAuth callback (ONCE ONLY)
-# -------------------------
+
+# Handle Google callback ONLY if redirected
 if "code" in st.query_params and not st.session_state.get("google_logged_in"):
-    success = handle_callback()
+    handle_callback()
 
-    if success:
+    if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
+        st.query_params.clear()
+        st.rerun()   # 🔥 CRITICAL LINE
 
-        # 🔥 Remove OAuth code from browser URL permanently
-        st.components.v1.html(
-            """
-            <script>
-              window.history.replaceState({}, document.title, window.location.pathname);
-            </script>
-            """,
-            height=0,
-        )
-
-        st.rerun()
 
 # If user not authenticated yet → show login page
 if st.session_state.auth_mode is None and not st.session_state.get("google_logged_in"):
@@ -482,18 +466,11 @@ elif st.session_state.auth_mode == "guest":
 
 if st.sidebar.button("🚪 Logout"):
     for k in [
-        "auth_mode",
-        "google_logged_in",
-        "google_email",
-        "google_creds",
-        "_oauth_handled",
-        "initialized",
-        "history",
-        "saved_circuits",
+        "auth_mode", "google_logged_in", "google_email", "google_creds",
+        "initialized", "history", "saved_circuits"
     ]:
         st.session_state.pop(k, None)
-
-    st.query_params.clear()   # 🔥 REQUIRED
+    
     st.rerun()
 
 def reset_app():
