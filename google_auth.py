@@ -13,6 +13,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/drive.file",
 ]
+
 def login_button():
     flow = Flow.from_client_config(
         {
@@ -42,50 +43,54 @@ def login_button():
         </div>
     </a>
     """, unsafe_allow_html=True)
+
 def handle_callback():
-
+    # Don't handle if already logged in
     if st.session_state.get("google_logged_in"):
-        return
-
-    if st.session_state.get("oauth_handled"):
         return
 
     query_params = st.query_params
     if "code" not in query_params:
         return
 
-    st.session_state.oauth_handled = True
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.environ["GOOGLE_CLIENT_ID"],
+                    "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [os.environ["REDIRECT_URI"]],
+                }
+            },
+            scopes=SCOPES,
+        )
 
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": os.environ["GOOGLE_CLIENT_ID"],
-                "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [os.environ["REDIRECT_URI"]],
-            }
-        },
-        scopes=SCOPES,
-    )
+        flow.redirect_uri = os.environ["REDIRECT_URI"]
+        flow.fetch_token(code=query_params["code"])
 
-    flow.redirect_uri = os.environ["REDIRECT_URI"]
-    flow.fetch_token(code=query_params["code"])
+        creds = flow.credentials
 
-    creds = flow.credentials
+        idinfo = id_token.verify_oauth2_token(
+            creds.id_token,
+            requests.Request(),
+            os.environ["GOOGLE_CLIENT_ID"],
+        )
 
-    idinfo = id_token.verify_oauth2_token(
-        creds.id_token,
-        requests.Request(),
-        os.environ["GOOGLE_CLIENT_ID"],
-    )
+        st.session_state.google_email = idinfo["email"]
+        st.session_state.google_creds = creds
+        st.session_state.google_logged_in = True
 
-    st.session_state.google_email = idinfo["email"]
-    st.session_state.google_creds = creds
-    st.session_state.google_logged_in = True
+        # Clear the code from URL
+        st.query_params.clear()
+        
+        # Force rerun to update the app state
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"Login failed: {e}")
 
-    st.query_params.clear()
-    
 def get_drive_service():
     creds = st.session_state["google_creds"]
     return build("drive", "v3", credentials=creds)
