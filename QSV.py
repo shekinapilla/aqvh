@@ -497,12 +497,23 @@ elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
 if st.sidebar.button("🚪 Logout"):
-    cookies.clear()
+
+    # 1️⃣ Clear cookies
+    cookies["auth_mode"] = ""
+    cookies["email"] = ""
     cookies.save()
 
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
+    # 2️⃣ Reset ONLY auth-related session state
+    st.session_state.auth_mode = "guest"
+    st.session_state.google_logged_in = False
+    st.session_state.google_email = None
+    st.session_state.local_email = None
+    st.session_state.google_creds = None
 
+    # 3️⃣ Optional: reset app state (safe)
+    st.session_state.initialized = False
+
+    # 4️⃣ Force clean reload
     st.rerun()
 
 def reset_app():
