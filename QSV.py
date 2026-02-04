@@ -52,8 +52,11 @@ cookies = EncryptedCookieManager(
 
 if not cookies.ready():
     st.stop()
-# 🔐 Auto-login from cookie
-if st.session_state.auth_mode in (None, "guest"):
+# 🔐 Auto-login from cookie (ONLY if not logging out)
+if (
+    st.session_state.auth_mode == "guest"
+    and not st.session_state.get("logout_in_progress", False)
+):
     mode = cookies.get("auth_mode")
     email = cookies.get("email")
 
@@ -71,27 +74,19 @@ if st.session_state.auth_mode in (None, "guest"):
 # -------------------------
 
 # Handle Google callback ONLY if redirected
-if st.session_state.auth_mode == "guest" and not st.session_state.google_logged_in:
+# 🔐 Handle Google OAuth callback (ONLY ONCE)
+if "code" in st.query_params and not st.session_state.get("google_logged_in"):
     handle_callback()
 
-    if st.session_state.google_logged_in:
+    if st.session_state.get("google_logged_in"):
         st.session_state.auth_mode = "google"
-
         cookies["auth_mode"] = "google"
         cookies["email"] = st.session_state.google_email
         cookies.save()
-
         st.query_params.clear()
         st.rerun()
 
 # If user not authenticated yet → show login page
-if (
-    "code" in st.query_params
-    and not st.session_state.get("google_logged_in")
-    and not st.session_state.get("logout_in_progress")
-):
-    handle_callback()
-
     # -------------------------
     # GOOGLE-LIKE LOGIN PAGE
     # -------------------------
@@ -518,31 +513,32 @@ elif st.session_state.auth_mode == "guest":
     st.sidebar.info("👤 Guest mode (local only)")
 
 if st.sidebar.button("🚪 Logout"):
+    st.session_state.logout_in_progress = True
 
     # Clear cookies
-    cookies["auth_mode"] = ""
-    cookies["email"] = ""
+    cookies["auth_mode"] = None
+    cookies["email"] = None
     cookies.save()
 
-    # Reset auth
+    # Clear auth state
+    for key in [
+        "google_logged_in",
+        "google_email",
+        "google_creds",
+        "local_email",
+        "oauth_handled",
+    ]:
+        if key in st.session_state:
+            del st.session_state[key]
+
     st.session_state.auth_mode = "guest"
-    st.session_state.google_logged_in = False
-    st.session_state.google_email = None
-    st.session_state.google_creds = None
-    st.session_state.local_email = None
 
-    # Clear OAuth state
-    if "oauth_handled" in st.session_state:
-        del st.session_state.oauth_handled
-
-    # Clear URL
+    # Clear URL params
     st.query_params.clear()
 
-    # Reset app state
-    st.session_state.initialized = False
-
     st.rerun()
-
+if "logout_in_progress" in st.session_state:
+    del st.session_state.logout_in_progress
 def reset_app():
     st.session_state.n_qubits = 1
     st.session_state.manual_ops = []
