@@ -166,4 +166,4 @@ def upload_history_to_drive(local_file="history.pkl"):
         fields="id",
     ).execute()
 
-    st.success("✅ history.pkl uploaded to Google Drive")s
+    st.success("✅ history.pkl uploaded to Google Drive")
