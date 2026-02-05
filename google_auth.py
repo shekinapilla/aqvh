@@ -35,9 +35,8 @@ def start_google_login():
         prompt="consent",
     )
 
-    # 🔒 Private session key (critical)
-    st.session_state["_oauth_state"] = state
-    st.session_state["_oauth_started"] = True
+    # ✅ store state in query params (persistent)
+    st.query_params["oauth_state"] = state
 
     st.markdown(
         f'<meta http-equiv="refresh" content="0; url={auth_url}">',
@@ -45,37 +44,28 @@ def start_google_login():
     )
 
 
-def handle_google_callback():
-    # Already authenticated → do nothing
-    if st.session_state.get("google_oauth_done"):
-        return True
 
+def handle_google_callback():
     params = st.query_params
 
     if "code" not in params or "state" not in params:
         return False
 
-    # 🔒 Lock state once
-    if "_oauth_state_checked" not in st.session_state:
-        expected = st.session_state.get("_oauth_state")
-        returned = params["state"][0]
+    expected_state = params.get("oauth_state")
+    returned_state = params["state"]
 
-        if not expected or returned != expected:
-            st.error("Invalid OAuth state")
-            return False
-
-        st.session_state["_oauth_state_checked"] = True
+    if expected_state != returned_state:
+        st.error("Invalid OAuth state")
+        return False
 
     try:
-        flow = get_flow(state=params["state"][0])
-        flow.fetch_token(code=params["code"][0])
+        flow = get_flow(state=returned_state)
+        flow.fetch_token(code=params["code"])
 
         st.session_state.google_credentials = flow.credentials
         st.session_state.google_oauth_done = True
 
-        # Cleanup AFTER success
-        st.session_state.pop("_oauth_state", None)
-        st.session_state.pop("_oauth_state_checked", None)
+        # cleanup
         st.query_params.clear()
 
         return True
