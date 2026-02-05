@@ -2,6 +2,8 @@ import os
 import streamlit as st
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
@@ -30,7 +32,7 @@ def get_oauth_flow(state=None):
         state=state,
     )
 
-def initiate_google_login():
+def start_google_login():
     """Start Google OAuth flow"""
     # Clear any existing state
     if "oauth_state" in st.session_state:
@@ -47,21 +49,21 @@ def initiate_google_login():
     st.session_state.oauth_state = state
     st.session_state.oauth_flow = flow
     
-    # Redirect
+    # Redirect to Google login
     st.markdown(
         f'<meta http-equiv="refresh" content="0; url={auth_url}">',
         unsafe_allow_html=True,
     )
 
 def handle_oauth_callback():
-    """Handle OAuth callback"""
+    """Handle OAuth callback - Google nundi response process cheyyali"""
     params = st.query_params
     
-    # Check if this is a callback
+    # Check if this is a callback from Google
     if "code" not in params or "state" not in params:
-        return False
+        return False  # Regular page load, callback kaadhu
     
-    # Verify state
+    # Verify state parameter (security check)
     expected_state = st.session_state.get("oauth_state")
     returned_state = params.get("state")
     
@@ -80,7 +82,7 @@ def handle_oauth_callback():
         # Exchange code for tokens
         flow.fetch_token(code=params["code"])
         
-        # Store credentials
+        # Store credentials in session
         creds = flow.credentials
         st.session_state.google_credentials = {
             "token": creds.token,
@@ -95,9 +97,6 @@ def handle_oauth_callback():
         
         # Verify and extract user info from ID token
         if creds.id_token:
-            from google.oauth2 import id_token
-            from google.auth.transport import requests as google_requests
-            
             try:
                 idinfo = id_token.verify_oauth2_token(
                     creds.id_token,
@@ -109,15 +108,15 @@ def handle_oauth_callback():
             except Exception as e:
                 st.warning(f"Could not verify ID token: {e}")
         
-        # Clean up
+        # Clean up temporary state
         for key in ["oauth_state", "oauth_flow"]:
             if key in st.session_state:
                 del st.session_state[key]
         
-        # Clear query params
+        # Clear query params (Google nundi vachina code and state)
         st.query_params.clear()
         
-        st.success("Successfully logged in with Google!")
+        # Login successful
         return True
         
     except Exception as e:
@@ -148,6 +147,22 @@ def get_google_creds():
         id_token=creds_data.get("id_token"),
     )
 
-# Backward compatibility aliases
+def logout_google():
+    """Logout Google user - clear all session data"""
+    keys_to_remove = [
+        "google_credentials", 
+        "google_email", 
+        "google_name",
+        "is_authenticated",
+        "auth_mode"
+    ]
+    for key in keys_to_remove:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    # Also clear query params
+    st.query_params.clear()
+
+# Aliases for backward compatibility
 handle_google_callback = handle_oauth_callback
-start_google_login = initiate_google_login
+initiate_google_login = start_google_login
