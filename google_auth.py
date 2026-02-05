@@ -1,10 +1,20 @@
 import os
+from dotenv import load_dotenv
 import streamlit as st
 from google_auth_oauthlib.flow import Flow
 
-CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
-CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
-REDIRECT_URI = os.environ["REDIRECT_URI"]
+# 🔥 LOAD ENV FIRST
+load_dotenv()
+
+CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+REDIRECT_URI = os.environ.get("REDIRECT_URI")
+if not CLIENT_ID or not CLIENT_SECRET or not REDIRECT_URI:
+    raise RuntimeError(
+        "Missing Google OAuth env vars. "
+        "Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI"
+    )
+
 
 SCOPES = ["openid", "email", "profile"]
 
@@ -83,3 +93,4 @@ def handle_google_callback():
     except Exception as e:
         st.error(f"Google authentication failed: {e}")
         return False
+
