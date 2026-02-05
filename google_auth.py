@@ -5,6 +5,7 @@ from google_auth_oauthlib.flow import Flow
 CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
 REDIRECT_URI = os.environ["REDIRECT_URI"]
+
 SCOPES = ["openid", "email", "profile"]
 
 
@@ -27,18 +28,17 @@ def get_flow(state=None):
 
 def start_google_login():
     flow = get_flow()
+
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
-    
-    # ✅ Store state in session state (persistent across redirects)
-    st.session_state.oauth_state = state
-    
-    # Store the auth URL in session too if needed
-    st.session_state.auth_url = auth_url
-    
+
+    # 🔒 Private session key (critical)
+    st.session_state["_oauth_state"] = state
+    st.session_state["_oauth_started"] = True
+
     st.markdown(
         f'<meta http-equiv="refresh" content="0; url={auth_url}">',
         unsafe_allow_html=True,
@@ -46,42 +46,40 @@ def start_google_login():
 
 
 def handle_google_callback():
+    # Already authenticated → do nothing
+    if st.session_state.get("google_oauth_done"):
+        return True
+
     params = st.query_params
-    
+
     if "code" not in params or "state" not in params:
         return False
-    
-    # Get state from session state
-    expected_state = st.session_state.get("oauth_state")
-    returned_state = params["state"]
-    
-    if not expected_state:
-        st.error("No OAuth state found in session. Please try logging in again.")
-        return False
-    
-    if expected_state != returned_state:
-        st.error("Invalid OAuth state. Possible CSRF attack or session expired.")
-        # Clean up
-        if "oauth_state" in st.session_state:
-            del st.session_state.oauth_state
-        return False
-    
+
+    # 🔒 Lock state once
+    if "_oauth_state_checked" not in st.session_state:
+        expected = st.session_state.get("_oauth_state")
+        returned = params["state"][0]
+
+        if not expected or returned != expected:
+            st.error("Invalid OAuth state")
+            return False
+
+        st.session_state["_oauth_state_checked"] = True
+
     try:
-        flow = get_flow(state=returned_state)
-        flow.fetch_token(code=params["code"])
-        
+        flow = get_flow(state=params["state"][0])
+        flow.fetch_token(code=params["code"][0])
+
         st.session_state.google_credentials = flow.credentials
         st.session_state.google_oauth_done = True
-        
-        # Clean up
-        if "oauth_state" in st.session_state:
-            del st.session_state.oauth_state
-        
-        # Clear query params
+
+        # Cleanup AFTER success
+        st.session_state.pop("_oauth_state", None)
+        st.session_state.pop("_oauth_state_checked", None)
         st.query_params.clear()
-        
+
         return True
-        
+
     except Exception as e:
         st.error(f"Google authentication failed: {e}")
         return False
