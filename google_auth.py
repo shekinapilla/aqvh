@@ -45,7 +45,7 @@ def initiate_google_login():
     
     # Store state in session
     st.session_state.oauth_state = state
-    st.session_state.oauth_flow = flow  # Store the entire flow if needed
+    st.session_state.oauth_flow = flow
     
     # Redirect
     st.markdown(
@@ -147,3 +147,7 @@ def get_google_creds():
         scopes=creds_data["scopes"],
         id_token=creds_data.get("id_token"),
     )
+
+# Backward compatibility aliases
+handle_google_callback = handle_oauth_callback
+start_google_login = initiate_google_login
