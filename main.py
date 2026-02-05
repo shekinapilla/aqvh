@@ -1,5 +1,5 @@
 import streamlit as st
-from google_auth import handle_google_callback
+from google_auth import handle_oauth_callback
 from login_page import render_login_page
 from ibm_app import run_ibm_app
 
