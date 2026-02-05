@@ -9,7 +9,7 @@ REDIRECT_URI = os.environ["REDIRECT_URI"]
 SCOPES = ["openid", "email", "profile"]
 
 
-def get_flow(state=None):
+def create_flow():
     return Flow.from_client_config(
         {
             "web": {
@@ -22,21 +22,16 @@ def get_flow(state=None):
         },
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
-        state=state,
     )
 
 
 def start_google_login():
-    flow = get_flow()
-
-    auth_url, state = flow.authorization_url(
+    flow = create_flow()
+    auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
-
-    # ✅ store state in query params (persistent)
-    st.query_params["oauth_state"] = state
 
     st.markdown(
         f'<meta http-equiv="refresh" content="0; url={auth_url}">',
@@ -44,32 +39,20 @@ def start_google_login():
     )
 
 
-
 def handle_google_callback():
-    params = st.query_params
-
-    if "code" not in params or "state" not in params:
-        return False
-
-    expected_state = params.get("oauth_state")
-    returned_state = params["state"]
-
-    if expected_state != returned_state:
-        st.error("Invalid OAuth state")
+    if "code" not in st.query_params:
         return False
 
     try:
-        flow = get_flow(state=returned_state)
-        flow.fetch_token(code=params["code"])
+        flow = create_flow()
+        flow.fetch_token(code=st.query_params["code"])
 
         st.session_state.google_credentials = flow.credentials
         st.session_state.google_oauth_done = True
 
-        # cleanup
         st.query_params.clear()
-
         return True
 
     except Exception as e:
-        st.error(f"Google authentication failed: {e}")
+        st.error(f"Google login failed: {e}")
         return False
