@@ -17,7 +17,7 @@ python-dotenv>=1.0
 # -------------------------
 # Quantum / Qiskit
 # -------------------------
-qiskit>=1.0
+qiskit
 qiskit-ibm-runtime>=0.23
 
 # -------------------------
