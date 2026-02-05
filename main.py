@@ -6,26 +6,33 @@ from ibm_app import run_ibm_app
 st.set_page_config(page_title="Quantum State Visualizer", layout="wide")
 
 # ---- OAuth callback FIRST ----
-# Idi Google login response process chesthundi
+# Google login response process chesthundi
 if handle_oauth_callback():  # Login successful ayithe
     st.session_state.is_authenticated = True
     st.session_state.auth_mode = "google"
-    # Immediately app open cheyadaniki
-    st.rerun()
+    st.rerun()  # Ippudu app open avvali
 
 # ---- Auth flags ----
-# Initialize auth state
 if "is_authenticated" not in st.session_state:
     st.session_state.is_authenticated = False
 
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = None
 
-# ---- Google credentials check ----
-# Google login ayi credentials unte, automatically authenticate cheyyali
+# ---- Check all login methods ----
+# Google login check
 if "google_credentials" in st.session_state:
     st.session_state.is_authenticated = True
     st.session_state.auth_mode = "google"
+
+# Local login check (nuvvu local login code vunte)
+if "local_email" in st.session_state:
+    st.session_state.is_authenticated = True
+    st.session_state.auth_mode = "local"
+
+# Guest login check
+if st.session_state.get("auth_mode") == "guest":
+    st.session_state.is_authenticated = True
 
 # ---- Hard router ----
 # Login avvaledhu ante login page chupiyali
