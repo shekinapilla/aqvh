@@ -880,11 +880,13 @@ def run_ibm_app():
         # =========================================================
         with right_top:
             st.subheader("🧾 QASM Builder")
+        
+            uploaded = st.file_uploader(
+                "Upload QASM file",
+                type=["qasm", "txt"],
+                key=f"qasm_upload_{st.session_state.qasm_uploader_key}"
+            )
 
-                    "Upload QASM file",
-                        type=["qasm", "txt"],
-                        key=f"qasm_upload_{st.session_state.qasm_uploader_key}"
-                    )
 
             if uploaded:
                 try:
