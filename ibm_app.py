@@ -482,7 +482,8 @@ def run_ibm_app():
 
     st.sidebar.image("logo.png", use_container_width=True)
     st.sidebar.title("Quantum State Visualizer")
-
+    if "qasm_uploader_key" not in st.session_state:
+     st.session_state.qasm_uploader_key = 0
     # =========================================================
     # ⚙️ Execution Target (Single Source of Truth)
     # =========================================================
@@ -550,24 +551,29 @@ def run_ibm_app():
 
     def reset_app():
         qc = QuantumCircuit(1, 1)
-
+    
         st.session_state.current_qc = qc
         st.session_state.manual_qc = qc
         st.session_state.manual_ops = []
-        st.session_state.n_qubits = 1
-
+    
         qasm = safe_get_qasm(qc)
         st.session_state.editable_qasm = qasm
         st.session_state.last_qasm = qasm
         st.session_state.qasm_source = "manual"
-
-        st.session_state.selected_gate = None
-        st.session_state.qasm_upload_applied = False
+    
+        # 🔥 CRITICAL RESET FLAGS
+        st.session_state.execution_lock = False
         st.session_state.last_run_mode = None
         st.session_state.last_run_result = None
-
-        st.session_state.last_executed_target = None
+        st.session_state.last_uploaded_qasm_hash = None
+        st.session_state.qasm_upload_applied = False
+    
+        # 🔥 FORCE FILE UPLOADER RESET
+        st.session_state.qasm_uploader_key += 1
+    
         st.success("✅ New circuit created.")
+        auto_execute()
+
 
     st.sidebar.button("🆕 Reset Circuit", on_click=reset_app)
 
@@ -875,11 +881,10 @@ def run_ibm_app():
         with right_top:
             st.subheader("🧾 QASM Builder")
 
-            uploaded = st.file_uploader(
-                "Upload QASM file",
-                type=["qasm", "txt"],
-                key="qasm_upload"
-            )
+                    "Upload QASM file",
+                        type=["qasm", "txt"],
+                        key=f"qasm_upload_{st.session_state.qasm_uploader_key}"
+                    )
 
             if uploaded:
                 try:
