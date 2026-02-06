@@ -7,6 +7,7 @@ import streamlit as st
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import Statevector, partial_trace
 from qiskit.qasm2 import dumps as dumps2
+from qiskit.visualization import Bloch
 
 # --- IBM Runtime (2025/2026 compatible) ---
 from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
@@ -165,33 +166,16 @@ def purity_from_rho_mat(rho_mat):
 
 
 def plot_bloch_vector(bvec, title="Bloch Sphere"):
-    fig = plt.figure(figsize=(2.5, 2.5), dpi=180)
-    ax = fig.add_subplot(111, projection="3d")
+    bloch = Bloch()
+    bloch.add_vectors(bvec)
 
-    u, v = np.mgrid[0:2*np.pi:80j, 0:np.pi:40j]
-    ax.plot_surface(
-        np.cos(u) * np.sin(v),
-        np.sin(u) * np.sin(v),
-        np.cos(v),
-        alpha=0.12,
-        linewidth=0,
-        color="cyan"
-    )
+    bloch.vector_color = ["red"]
+    bloch.sphere_color = "#EAF6FF"
+    bloch.frame_color = "black"
+    bloch.font_size = 10
 
-    ax.quiver(0, 0, 0, bvec[0], bvec[1], bvec[2],
-              length=1.0, linewidth=2, color="r")
-
-    ax.set_xlim([-1, 1])
-    ax.set_ylim([-1, 1])
-    ax.set_zlim([-1, 1])
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-
-    ax.set_title(title, fontsize=9)
-    fig.tight_layout()
-    return fig
-
+    bloch.render(title=title)   # draws, returns None
+    return bloch.fig            # ← THIS is the matplotlib Figure
 def detach_from_uploaded_qasm():
     """
     Detach circuit from uploaded QASM file.
