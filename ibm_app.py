@@ -7,7 +7,7 @@ import streamlit as st
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import Statevector, partial_trace
 from qiskit.qasm2 import dumps as dumps2
-from qiskit.visualization import Bloch
+
 
 # --- IBM Runtime (2025/2026 compatible) ---
 from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
@@ -15,6 +15,7 @@ from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
 # --- Numerical & plotting ---
 import numpy as np
 import matplotlib.pyplot as plt
+from qiskit.visualization.bloch import Bloch
 
 # --- IO & persistence ---
 import io
