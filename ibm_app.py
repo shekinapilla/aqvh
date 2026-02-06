@@ -483,7 +483,7 @@ def run_ibm_app():
     st.sidebar.image("logo.png", use_container_width=True)
     st.sidebar.title("Quantum State Visualizer")
     if "qasm_uploader_key" not in st.session_state:
-     st.session_state.qasm_uploader_key = 0
+      st.session_state.qasm_uploader_key = 0
     # =========================================================
     # ⚙️ Execution Target (Single Source of Truth)
     # =========================================================
