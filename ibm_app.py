@@ -445,6 +445,7 @@ def run_ibm_app():
         st.session_state.manual_qc = qc
         st.session_state.manual_ops = []
         st.session_state.n_qubits = 1
+        st.session_state.last_uploaded_qasm_hash = None
 
         # ---------- QASM ----------
         initial_qasm = dumps2(qc)
@@ -880,24 +881,29 @@ def run_ibm_app():
                 key="qasm_upload"
             )
 
-            if uploaded and not st.session_state.qasm_upload_applied:
+            if uploaded:
                 try:
                     qasm_text = uploaded.getvalue().decode("utf-8")
-                    qc = QuantumCircuit.from_qasm_str(qasm_text)
-
-                    st.session_state.current_qc = qc
-                    st.session_state.manual_qc = qc
-                    st.session_state.manual_ops = []
-                    st.session_state.n_qubits = qc.num_qubits
-
-                    st.session_state.editable_qasm = qasm_text
-                    st.session_state.last_qasm = qasm_text
-                    st.session_state.qasm_source = "upload"
-                    st.session_state.qasm_upload_applied = True
-
-                    st.session_state.last_executed_target = None
-                    st.success("✅ QASM loaded and applied")
-
+                    qasm_hash = hash(qasm_text)
+        
+                    if qasm_hash != st.session_state.last_uploaded_qasm_hash:
+                        qc = QuantumCircuit.from_qasm_str(qasm_text)
+        
+                        st.session_state.current_qc = qc
+                        st.session_state.manual_qc = qc
+                        st.session_state.manual_ops = []
+                        st.session_state.n_qubits = qc.num_qubits
+        
+                        st.session_state.editable_qasm = qasm_text
+                        st.session_state.last_qasm = qasm_text
+                        st.session_state.qasm_source = "upload"
+        
+                        st.session_state.last_uploaded_qasm_hash = qasm_hash
+                        st.session_state.execution_lock = False
+        
+                        auto_execute()
+                        st.success("✅ QASM loaded and updated")
+        
                 except Exception as e:
                     st.error(f"❌ Invalid QASM file: {e}")
 
